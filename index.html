@@ -4,9 +4,345 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slag om Laurabos 2026</title>
+  <style>
+    :root {
+      --green-dark: #163b34;
+      --green-mid: #245247;
+      --green-light: #dfe9e1;
+      --sand: #efe7d7;
+      --sand-dark: #d8ccb6;
+      --text: #1f2a27;
+      --white: #ffffff;
+      --accent: #b89c65;
+      --card-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--sand);
+      color: var(--text);
+    }
+
+    .hero {
+      background: linear-gradient(rgba(22,59,52,0.82), rgba(22,59,52,0.82)),
+        url("https://images.unsplash.com/photo-1513553404607-988d4c8f75b1?auto=format&fit=crop&w=1600&q=80") center/cover no-repeat;
+      color: var(--white);
+      padding: 48px 20px 36px;
+      text-align: center;
+    }
+
+    .hero .brand {
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      opacity: 0.9;
+      margin-bottom: 10px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 40px;
+      line-height: 1.1;
+    }
+
+    .hero p {
+      margin: 14px auto 0;
+      max-width: 760px;
+      font-size: 18px;
+      line-height: 1.5;
+      opacity: 0.95;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: -22px auto 40px;
+      padding: 0 16px;
+    }
+
+    .top-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+      padding: 22px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(22,59,52,0.08);
+    }
+
+    .weekend-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .meta-box {
+      background: var(--green-light);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .meta-box .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.7;
+      margin-bottom: 6px;
+    }
+
+    .meta-box .value {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .tab {
+      border: none;
+      background: var(--white);
+      color: var(--green-dark);
+      padding: 12px 18px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: var(--card-shadow);
+    }
+
+    .tab.active {
+      background: var(--green-dark);
+      color: var(--white);
+    }
+
+    .panel {
+      display: none;
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+      padding: 22px;
+      border: 1px solid rgba(22,59,52,0.08);
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    h2 {
+      margin-top: 0;
+      color: var(--green-dark);
+    }
+
+    .intro {
+      color: #52625c;
+      margin-top: -6px;
+      margin-bottom: 18px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #faf8f3;
+      border: 1px solid var(--sand-dark);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+      color: var(--green-dark);
+    }
+
+    .btn {
+      display: inline-block;
+      border: none;
+      background: var(--green-dark);
+      color: var(--white);
+      padding: 12px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .btn.secondary {
+      background: var(--white);
+      color: var(--green-dark);
+      border: 1px solid var(--green-dark);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .placeholder {
+      padding: 18px;
+      border-radius: 14px;
+      background: var(--green-light);
+      color: var(--green-dark);
+      font-weight: bold;
+    }
+
+    .footer-note {
+      text-align: center;
+      color: #61716c;
+      font-size: 14px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 700px) {
+      .hero h1 {
+        font-size: 30px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>Slag om Laurabos 2026</h1>
-  <p>De app werkt.</p>
+  <header class="hero">
+    <div class="brand">Domein Laurabos</div>
+    <h1>Slag om Laurabos 2026</h1>
+    <p>Scramble à deux voor 6 teams, 2 wedstrijddagen, live loting, flightindeling en een eindklassement over 36 holes.</p>
+  </header>
+
+  <main class="wrap">
+    <section class="top-card">
+      <h2>Golfweekend</h2>
+      <p class="intro">
+        Vrijdag 9 oktober t/m zondag 11 oktober 2026, 12 personen, Play, Dine & Stay.
+      </p>
+
+      <div class="weekend-meta">
+        <div class="meta-box">
+          <div class="label">Locatie</div>
+          <div class="value">Domein Laurabos</div>
+        </div>
+        <div class="meta-box">
+          <div class="label">Spelvorm</div>
+          <div class="value">Scramble à deux</div>
+        </div>
+        <div class="meta-box">
+          <div class="label">Wedstrijd</div>
+          <div class="value">36 holes netto</div>
+        </div>
+        <div class="meta-box">
+          <div class="label">Teams</div>
+          <div class="value">6 koppels</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="spelers">Spelers</button>
+      <button class="tab" data-tab="loting">Loting</button>
+      <button class="tab" data-tab="flights">Flights</button>
+      <button class="tab" data-tab="scores">Scores</button>
+      <button class="tab" data-tab="stand">Stand</button>
+    </div>
+
+    <section id="spelers" class="panel active">
+      <h2>Spelers</h2>
+      <p class="intro">Hier komen straks de 12 spelers, de stellen en de exacte handicaps.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Vooraf ingevoerd</h3>
+          <ul>
+            <li>Hendrik-Jan en Eline</li>
+            <li>Willem en Rieke</li>
+            <li>Jan Willem en Ingrid</li>
+            <li>Jan en Carine</li>
+            <li>Richard en Carla</li>
+            <li>Martin en Vicky</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Regels</h3>
+          <ul>
+            <li>Man en vrouw per team</li>
+            <li>Nooit met eigen partner</li>
+            <li>Exact handicap op de dag zelf invullen</li>
+            <li>Team HCP = 35% laagste + 15% hoogste baanhandicap</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="loting" class="panel">
+      <h2>Live loting</h2>
+      <p class="intro">Alleen voor wedstrijdleiding. Martin en Carine krijgen straks toegang via pincode.</p>
+      <div class="placeholder">Hier komt straks de knop: Start loting</div>
+      <div class="btn-row">
+        <button class="btn">Start loting</button>
+        <button class="btn secondary">Teams definitief maken</button>
+      </div>
+    </section>
+
+    <section id="flights" class="panel">
+      <h2>Flightindeling</h2>
+      <p class="intro">Dag 1 willekeurig. Dag 2 op basis van stand, hoogste netto score start eerst.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Dag 1</h3>
+          <p>Flight 1 - 13:30</p>
+          <p>Flight 2 - 13:42</p>
+          <p>Flight 3 - 13:54</p>
+        </div>
+        <div class="card">
+          <h3>Dag 2</h3>
+          <p>Flight 1 - 13:30</p>
+          <p>Flight 2 - 13:42</p>
+          <p>Flight 3 - 13:54</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="scores" class="panel">
+      <h2>Scores</h2>
+      <p class="intro">Hier komt straks de invoer per team per hole, op basis van de Crossmoor scorekaart.</p>
+      <div class="placeholder">Scoremodule volgt in de volgende stap</div>
+    </section>
+
+    <section id="stand" class="panel">
+      <h2>Klassement</h2>
+      <p class="intro">Netto strokeplay over 36 holes. Laagste totaalscore wint.</p>
+      <div class="placeholder">Dagstand en eindklassement volgen in de volgende stap</div>
+    </section>
+
+    <p class="footer-note">
+      Golf, diner en verblijf vormen samen het weekendconcept van het arrangement. :contentReference[oaicite:1]{index=1}
+    </p>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+  </script>
 </body>
 </html>
