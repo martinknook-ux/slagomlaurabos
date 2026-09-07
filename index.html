@@ -344,5 +344,42 @@
       });
     });
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+  const SUPABASE_URL = "HIER_JE_PROJECT_URL";
+  const SUPABASE_ANON_KEY = "HIER_JE_ANON_KEY";
+
+  const supabaseClient = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
+
+  async function testDatabase() {
+    const { data, error } = await supabaseClient
+      .from("players")
+      .select("name, sex, partner_name")
+      .order("id");
+
+    if (error) {
+      console.error(error);
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        "<p style='color:red'>Database verbinding mislukt</p>"
+      );
+      return;
+    }
+
+    console.log("Spelers uit Supabase:", data);
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      "<p style='padding:20px'>Database verbonden: " +
+      data.length +
+      " spelers gevonden.</p>"
+    );
+  }
+
+  testDatabase();
+</script>
 </body>
 </html>
