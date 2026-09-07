@@ -43,7 +43,7 @@
   </div>
 
   <section id="spelers" class="panel active card">
-    <h2>Spelers</h2><p class="intro">De namen en stellen staan vast. Vul op de dag zelf alleen de actuele exact handicap in.</p>
+    <h2>Spelers</h2><p class="intro">De namen en stellen staan vast. Vul op de dag zelf alleen de actuele exact handicap in. De baanhandicap wordt automatisch berekend voor heren geel en dames rood.</p>
     <div id="playersList" class="players-list"></div><div id="playersStatus" class="status">Database nog niet gekoppeld.</div>
   </section>
 
@@ -88,12 +88,43 @@
     document.querySelectorAll('.hcp-input').forEach(input=>input.addEventListener('change',saveHandicap));
   }
 
+  function calculateCourseHcp(exactHcp,sex){
+    if(exactHcp===null||!Number.isFinite(exactHcp))return null;
+
+    // Crossmoor Championship Course, 18 holes
+    // Heren geel: CR 72,6 | SR 133 | Par 72
+    // Dames rood:  CR 74,1 | SR 125 | Par 72
+    const slope=sex==='M'?133:125;
+    const courseRating=sex==='M'?72.6:74.1;
+    const par=72;
+
+    return Math.round((exactHcp*slope/113)+(courseRating-par));
+  }
+
   async function saveHandicap(event){
     if(!window.supabaseClient)return;
     const id=Number(event.target.dataset.id),raw=event.target.value.replace(',','.').trim(),exactHcp=raw===''?null:Number(raw);
-    if(raw!==''&&!Number.isFinite(exactHcp)){alert('Voer een geldige handicap in.');return;}
-    const {error}=await window.supabaseClient.from('players').update({exact_hcp:exactHcp}).eq('id',id);
-    if(error){console.error(error);alert('Opslaan van handicap is niet gelukt.');return;}
+
+    if(raw!==''&&(!Number.isFinite(exactHcp)||exactHcp < -4||exactHcp > 54)){
+      alert('Voer een geldige exact handicap in tussen -4,0 en 54,0.');
+      return;
+    }
+
+    const player=(window.currentPlayers||[]).find(p=>p.id===id);
+    if(!player){alert('Speler niet gevonden.');return;}
+
+    const courseHcp=exactHcp===null?null:calculateCourseHcp(exactHcp,player.sex);
+
+    const {error}=await window.supabaseClient
+      .from('players')
+      .update({exact_hcp:exactHcp,course_hcp:courseHcp})
+      .eq('id',id);
+
+    if(error){
+      console.error(error);
+      alert('Opslaan van handicap is niet gelukt.');
+      return;
+    }
     await loadPlayers();
   }
 
@@ -101,7 +132,7 @@
     const {data,error}=await window.supabaseClient.from('players').select('id,name,sex,partner_name,exact_hcp,course_hcp').order('id');
     const status=document.getElementById('playersStatus'),connection=document.getElementById('dbConnection');
     if(error){console.error(error);status.textContent='Databaseverbinding mislukt.';status.classList.add('error');connection.textContent='Supabase: verbinding mislukt.';renderPlayers(fallbackPlayers);return;}
-    renderPlayers(data);const completed=data.filter(p=>p.exact_hcp!==null).length;status.textContent=`Handicaps ingevuld: ${completed} / ${data.length}`;status.classList.remove('error');connection.textContent=`Supabase verbonden · ${data.length} spelers gevonden.`;
+    window.currentPlayers=data;renderPlayers(data);const completed=data.filter(p=>p.exact_hcp!==null).length;status.textContent=`Handicaps ingevuld: ${completed} / ${data.length}`;status.classList.remove('error');connection.textContent=`Supabase verbonden · ${data.length} spelers gevonden · baan-HCP automatisch.`;
   }
 
   async function initSupabase(){
