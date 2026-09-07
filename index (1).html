@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slag om Laurabos 2026</title>
+  <style>
+    :root{--green-dark:#173b34;--green-soft:#dfe8e1;--sand:#efe8da;--sand-dark:#d8cbb5;--white:#fff;--text:#25322e;--muted:#68756f;--accent:#b89d68;--danger:#8a3f3f;--radius:18px;--shadow:0 10px 28px rgba(20,45,38,.08)}
+    *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--sand);color:var(--text)}
+    .hero{background:linear-gradient(rgba(23,59,52,.78),rgba(23,59,52,.9)),url('https://images.unsplash.com/photo-1513553404607-988d4c8f75b1?auto=format&fit=crop&w=1600&q=80') center/cover no-repeat;color:#fff;padding:54px 18px 42px;text-align:center}
+    .hero .eyebrow{letter-spacing:2px;text-transform:uppercase;font-size:13px;opacity:.9;margin-bottom:10px}.hero h1{margin:0;font-size:clamp(32px,6vw,52px);line-height:1.05}.hero p{max-width:720px;margin:14px auto 0;line-height:1.5;font-size:17px;opacity:.95}
+    .wrap{width:min(1100px,calc(100% - 28px));margin:-24px auto 40px}.card{background:#fff;border:1px solid rgba(23,59,52,.08);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.summary .item{background:var(--green-soft);border-radius:14px;padding:14px}.label{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}.value{font-size:17px;font-weight:700;color:var(--green-dark)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.tab{border:1px solid rgba(23,59,52,.14);background:#fff;color:var(--green-dark);padding:11px 16px;border-radius:999px;font-weight:700;cursor:pointer;min-height:44px}.tab.active{background:var(--green-dark);color:#fff;border-color:var(--green-dark)}
+    .panel{display:none}.panel.active{display:block}h2{color:var(--green-dark);margin:0 0 8px}.intro{color:var(--muted);margin:0 0 18px;line-height:1.5}.players-list{display:grid;gap:10px}.player-row{display:grid;grid-template-columns:1.3fr .8fr .8fr;gap:10px;align-items:center;padding:12px;border:1px solid var(--sand-dark);border-radius:12px;background:#fff}.player-name{font-weight:700;color:var(--green-dark)}
+    input{width:100%;min-height:44px;border:1px solid #cfc8bb;border-radius:10px;padding:10px 12px;font-size:16px;background:#fff;color:var(--text)}.btn{border:none;background:var(--green-dark);color:#fff;padding:11px 16px;border-radius:11px;font-weight:700;cursor:pointer;min-height:44px}.btn:disabled{opacity:.45;cursor:not-allowed}
+    .status{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--green-soft);color:var(--green-dark);font-weight:700}.status.error{background:#f4dddd;color:var(--danger)}.muted{color:var(--muted);font-size:14px}
+    .flight-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.flight{background:#fbf9f4;border:1px solid var(--sand-dark);border-radius:14px;padding:14px}.flight .time{color:var(--accent);font-weight:800;font-size:18px;margin-bottom:8px}
+    .placeholder{padding:18px;border-radius:14px;background:var(--green-soft);color:var(--green-dark);border:1px solid rgba(23,59,52,.08)}.photo-strip{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;margin-top:18px}.photo{min-height:150px;border-radius:14px;background-size:cover;background-position:center;overflow:hidden;position:relative}.photo span{position:absolute;left:12px;bottom:10px;color:#fff;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,.4)}
+    .photo.golf{background-image:linear-gradient(rgba(0,0,0,.1),rgba(0,0,0,.28)),url('https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&w=1200&q=80')}.photo.dine{background-image:linear-gradient(rgba(0,0,0,.08),rgba(0,0,0,.3)),url('https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1000&q=80')}.photo.stay{background-image:linear-gradient(rgba(0,0,0,.08),rgba(0,0,0,.25)),url('https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1000&q=80')}.connection{margin-top:16px;font-size:14px;color:var(--muted)}
+    @media(max-width:760px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.flight-grid,.player-row,.photo-strip{grid-template-columns:1fr}.photo{min-height:170px}}
+  </style>
+</head>
+<body>
+<header class="hero"><div class="eyebrow">Domein Laurabos</div><h1>Slag om Laurabos 2026</h1><p>Scramble à deux, 6 teams, 2 wedstrijddagen en een eindklassement over 36 holes netto strokeplay.</p></header>
+<main class="wrap">
+  <section class="card">
+    <div class="summary">
+      <div class="item"><span class="label">Datum</span><span class="value">9 - 11 oktober</span></div>
+      <div class="item"><span class="label">Teams</span><span class="value">6 x 2 spelers</span></div>
+      <div class="item"><span class="label">Starttijd</span><span class="value">13:30</span></div>
+      <div class="item"><span class="label">Interval</span><span class="value">12 minuten</span></div>
+    </div>
+    <div class="photo-strip"><div class="photo golf"><span>Play</span></div><div class="photo dine"><span>Dine</span></div><div class="photo stay"><span>Stay</span></div></div>
+  </section>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="spelers">Spelers</button>
+    <button class="tab" data-tab="loting">Loting</button>
+    <button class="tab" data-tab="flights">Flights</button>
+    <button class="tab" data-tab="scores">Scores</button>
+    <button class="tab" data-tab="stand">Stand</button>
+  </div>
+
+  <section id="spelers" class="panel active card">
+    <h2>Spelers</h2><p class="intro">De namen en stellen staan vast. Vul op de dag zelf alleen de actuele exact handicap in. De baanhandicap wordt automatisch berekend voor heren geel en dames rood.</p>
+    <div id="playersList" class="players-list"></div><div id="playersStatus" class="status">Database nog niet gekoppeld.</div>
+  </section>
+
+  <section id="loting" class="panel card">
+    <h2>Live loting</h2><p class="intro">Man + vrouw, nooit met de eigen partner. De uiteindelijke loting wordt alleen door de wedstrijdleiding gestart.</p>
+    <div class="placeholder"><strong>Wedstrijdleiding</strong><p class="muted">Martin en Carine krijgen later toegang via een aparte beheercontrole.</p><button class="btn" disabled>Start loting</button></div>
+  </section>
+
+  <section id="flights" class="panel card">
+    <h2>Flightindeling</h2><p class="intro">Dag 1 willekeurig. Dag 2 op basis van de stand na dag 1, hoogste netto score start als eerste.</p>
+    <div class="flight-grid">
+      <div class="flight"><div class="time">13:30</div><strong>Flight 1</strong><p class="muted">2 teams</p></div>
+      <div class="flight"><div class="time">13:42</div><strong>Flight 2</strong><p class="muted">2 teams</p></div>
+      <div class="flight"><div class="time">13:54</div><strong>Flight 3</strong><p class="muted">2 teams</p></div>
+    </div>
+  </section>
+
+  <section id="scores" class="panel card"><h2>Scores</h2><p class="intro">Scramble à deux, één brutoscore per hole per team.</p><div class="placeholder">De scorekaart van Crossmoor komt hier in de volgende stap.</div></section>
+  <section id="stand" class="panel card"><h2>Klassement</h2><p class="intro">Netto strokeplay over 36 holes. Laagste totaalscore wint.</p><div class="placeholder">Dag 1, Dag 2 en het eindklassement komen hier.</div></section>
+  <div id="dbConnection" class="connection">Supabase: nog niet ingesteld.</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = "https://xpohkdyddpsnsaqxcbom.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_7kdaIfuksuqF-I4ujiC7Rg_2foUcqiQ";
+
+  const tabs=document.querySelectorAll('.tab'),panels=document.querySelectorAll('.panel');
+  tabs.forEach(tab=>tab.addEventListener('click',()=>{tabs.forEach(t=>t.classList.remove('active'));panels.forEach(p=>p.classList.remove('active'));tab.classList.add('active');document.getElementById(tab.dataset.tab).classList.add('active')}));
+
+  const fallbackPlayers=[
+    ['Hendrik-Jan','M','Eline'],['Eline','V','Hendrik-Jan'],['Willem','M','Rieke'],['Rieke','V','Willem'],['Jan Willem','M','Ingrid'],['Ingrid','V','Jan Willem'],['Jan','M','Carine'],['Carine','V','Jan'],['Richard','M','Carla'],['Carla','V','Richard'],['Martin','M','Vicky'],['Vicky','V','Martin']
+  ].map((p,i)=>({id:i+1,name:p[0],sex:p[1],partner_name:p[2],exact_hcp:null,course_hcp:null}));
+
+  function renderPlayers(players){
+    const list=document.getElementById('playersList');list.innerHTML='';
+    players.forEach(player=>{
+      const row=document.createElement('div');row.className='player-row';
+      row.innerHTML=`<div><div class="player-name">${player.name}</div><div class="muted">${player.sex==='M'?'Man · geel':'Vrouw · rood'} · partner: ${player.partner_name}</div></div><label><span class="label">Exact HCP</span><input class="hcp-input" inputmode="decimal" data-id="${player.id}" value="${player.exact_hcp??''}" placeholder="bijv. 18,4"></label><div><span class="label">Baan HCP</span><div class="value">${player.course_hcp??'-'}</div></div>`;
+      list.appendChild(row);
+    });
+    document.querySelectorAll('.hcp-input').forEach(input=>input.addEventListener('change',saveHandicap));
+  }
+
+  function calculateCourseHcp(exactHcp,sex){
+    if(exactHcp===null||!Number.isFinite(exactHcp))return null;
+
+    // Crossmoor Championship Course, 18 holes
+    // Heren geel: CR 72,6 | SR 133 | Par 72
+    // Dames rood:  CR 74,1 | SR 125 | Par 72
+    const slope=sex==='M'?133:125;
+    const courseRating=sex==='M'?72.6:74.1;
+    const par=72;
+
+    return Math.round((exactHcp*slope/113)+(courseRating-par));
+  }
+
+  async function saveHandicap(event){
+    if(!window.supabaseClient)return;
+    const id=Number(event.target.dataset.id),raw=event.target.value.replace(',','.').trim(),exactHcp=raw===''?null:Number(raw);
+
+    if(raw!==''&&(!Number.isFinite(exactHcp)||exactHcp < -4||exactHcp > 54)){
+      alert('Voer een geldige exact handicap in tussen -4,0 en 54,0.');
+      return;
+    }
+
+    const player=(window.currentPlayers||[]).find(p=>p.id===id);
+    if(!player){alert('Speler niet gevonden.');return;}
+
+    const courseHcp=exactHcp===null?null:calculateCourseHcp(exactHcp,player.sex);
+
+    const {error}=await window.supabaseClient
+      .from('players')
+      .update({exact_hcp:exactHcp,course_hcp:courseHcp})
+      .eq('id',id);
+
+    if(error){
+      console.error(error);
+      alert('Opslaan van handicap is niet gelukt.');
+      return;
+    }
+    await loadPlayers();
+  }
+
+  async function loadPlayers(){
+    const {data,error}=await window.supabaseClient.from('players').select('id,name,sex,partner_name,exact_hcp,course_hcp').order('id');
+    const status=document.getElementById('playersStatus'),connection=document.getElementById('dbConnection');
+    if(error){console.error(error);status.textContent='Databaseverbinding mislukt.';status.classList.add('error');connection.textContent='Supabase: verbinding mislukt.';renderPlayers(fallbackPlayers);return;}
+    window.currentPlayers=data;renderPlayers(data);const completed=data.filter(p=>p.exact_hcp!==null).length;status.textContent=`Handicaps ingevuld: ${completed} / ${data.length}`;status.classList.remove('error');connection.textContent=`Supabase verbonden · ${data.length} spelers gevonden · baan-HCP automatisch.`;
+  }
+
+  async function initSupabase(){
+    if(SUPABASE_URL.startsWith('VUL_')||SUPABASE_ANON_KEY.startsWith('VUL_')){renderPlayers(fallbackPlayers);document.getElementById('playersStatus').textContent='Vul eerst de Supabase Project URL en anon key in index.html.';return;}
+    window.supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);await loadPlayers();
+  }
+  initSupabase();
+</script>
+</body>
+</html>
