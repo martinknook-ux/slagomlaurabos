@@ -110,7 +110,7 @@
 
   <section id="loting" class="panel card">
     <h2>Live loting</h2>
-    <p class="intro">Alleen wedstrijdleiding kan de loting starten. De regels zijn vast: man + vrouw, nooit met de eigen partner.</p>
+    <p class="intro">Iedereen kan live meekijken op zijn eigen telefoon. Alleen de wedstrijdleiding bedient de loting. De regels zijn vast: man + vrouw, nooit met de eigen partner.</p>
 
     <div class="admin-box">
       <label>
@@ -120,6 +120,7 @@
       <button id="adminLoginBtn" class="btn">Inloggen</button>
     </div>
     <div id="adminStatus" class="status">Niet ingelogd als wedstrijdleiding.</div>
+    <div id="liveDrawStatus" class="status">Live loting: wacht op start.</div>
 
     <div id="drawControls" class="controls hidden">
       <button id="startDrawBtn" class="btn">Start loting</button>
@@ -142,10 +143,35 @@
 
   <section id="flights" class="panel card">
     <h2>Flightindeling</h2>
-    <p class="intro">Dag 1 willekeurig. Dag 2 op basis van de stand na dag 1, hoogste netto score start als eerste.</p>
-    <div class="grid-2">
-      <div class="subcard"><h3>Dag 1</h3><p>13:30</p><p>13:42</p><p>13:54</p></div>
-      <div class="subcard"><h3>Dag 2</h3><p>13:30</p><p>13:42</p><p>13:54</p></div>
+    <p class="intro">Dag 1 wordt willekeurig ingedeeld in 3 flights van 2 teams. Dag 2 volgt later automatisch op basis van de stand.</p>
+
+    <div class="admin-box">
+      <label>
+        <span class="label">Pincode wedstrijdleiding</span>
+        <input id="flightAdminPin" inputmode="numeric" type="password" placeholder="Pincode">
+      </label>
+      <button id="flightAdminLoginBtn" class="btn">Inloggen</button>
+    </div>
+    <div id="flightAdminStatus" class="status">Niet ingelogd als wedstrijdleiding.</div>
+
+    <div id="flightControls" class="controls hidden">
+      <button id="makeDay1FlightsBtn" class="btn">Maak indeling dag 1</button>
+      <button id="reshuffleDay1Btn" class="btn secondary" disabled>Opnieuw indelen</button>
+      <button id="saveDay1FlightsBtn" class="btn warn" disabled>Indeling definitief maken</button>
+    </div>
+
+    <div class="grid-2" style="margin-top:14px">
+      <div class="subcard">
+        <h3>Dag 1</h3>
+        <div id="day1Flights"><p class="muted">Nog geen flightindeling.</p></div>
+      </div>
+      <div class="subcard">
+        <h3>Dag 2</h3>
+        <p class="muted">Wordt na dag 1 automatisch opgebouwd als 6+5, 4+3 en 2+1.</p>
+        <p><strong>13:30</strong></p>
+        <p><strong>13:42</strong></p>
+        <p><strong>13:54</strong></p>
+      </div>
     </div>
   </section>
 
@@ -229,6 +255,8 @@ async function saveHandicap(event){
   const {error}=await window.supabaseClient.from("players").update({exact_hcp:exactHcp,course_hcp:courseHcp}).eq("id",id);
   if(error){console.error(error);alert("Opslaan is niet gelukt.");return;}
   await loadPlayers();
+loadDrawState();
+subscribeDrawState();
 }
 async function loadPlayers(){
   const {data,error}=await window.supabaseClient.from("players").select("id,name,sex,partner_name,exact_hcp,course_hcp").order("id");
@@ -287,6 +315,7 @@ async function loadExistingTeams(){
   if(error){console.error(error);return;}
   if(!data||!data.length)return;
   const teams=data.map(t=>({
+    id:t.id,
     player1:window.currentPlayers.find(p=>p.id===t.player1_id),
     player2:window.currentPlayers.find(p=>p.id===t.player2_id),
     team_hcp:t.team_hcp,
@@ -294,6 +323,7 @@ async function loadExistingTeams(){
   })).filter(t=>t.player1&&t.player2);
   window.currentTeams=teams;
   renderTeams(teams);
+  await loadFlights();
 }
 async function adminLogin(){
   const pin=document.getElementById("adminPin").value.trim();
@@ -313,7 +343,97 @@ async function adminLogin(){
   status.classList.remove("error");
   document.getElementById("drawControls").classList.remove("hidden");
 }
-function startDraw(){
+
+function publicDrawPayload(stage, revealedTeams=[]){
+  return {
+    stage,
+    team_number: window.revealIndex + 1,
+    man_name: window.drawTeams[window.revealIndex]?.player1?.name || null,
+    woman_name: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.player2?.name || null) : null,
+    team_hcp: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.team_hcp ?? null) : null,
+    player1_hcp: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.player1?.course_hcp ?? null) : null,
+    player2_hcp: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.player2?.course_hcp ?? null) : null,
+    revealed_teams: revealedTeams.map((t,i)=>({
+      team_number:i+1,
+      player1_name:t.player1.name,
+      player2_name:t.player2.name,
+      player1_hcp:t.player1.course_hcp,
+      player2_hcp:t.player2.course_hcp,
+      team_hcp:t.team_hcp
+    }))
+  };
+}
+
+async function pushDrawState(active, phase, payload){
+  if(!window.adminAuthenticated || !window.adminPin) return;
+  const {error}=await window.supabaseClient.rpc("update_draw_state",{
+    input_pin:window.adminPin,
+    input_active:active,
+    input_reveal_index:window.revealIndex,
+    input_phase:phase,
+    input_draw_data:payload
+  });
+  if(error) console.error("update_draw_state:",error);
+}
+
+function renderPublicDrawState(row){
+  const status=document.getElementById("liveDrawStatus");
+  const stage=document.getElementById("drawStage");
+  if(!row || !row.active){
+    status.textContent="Live loting: wacht op start.";
+    if(!window.adminAuthenticated) stage.classList.add("hidden");
+    return;
+  }
+
+  status.textContent="Live loting is bezig.";
+  stage.classList.remove("hidden");
+
+  const d=row.draw_data || {};
+  document.getElementById("teamNumber").textContent=d.team_number || (row.reveal_index+1) || 1;
+  document.getElementById("manName").textContent=d.man_name || "";
+  document.getElementById("womanName").textContent=d.woman_name || "????????";
+  document.getElementById("teamHcpText").textContent=
+    d.team_hcp!=null ? `Team HCP ${d.team_hcp} · ${d.player1_hcp} + ${d.player2_hcp}` : "";
+
+  if(Array.isArray(d.revealed_teams) && d.revealed_teams.length){
+    const grid=document.getElementById("teamsGrid");
+    grid.innerHTML=d.revealed_teams.map(t=>`
+      <div class="team-card">
+        <span class="label">Team ${t.team_number}</span>
+        <strong>${t.player1_name} & ${t.player2_name}</strong>
+        <div class="muted">Baan HCP ${t.player1_hcp} + ${t.player2_hcp}</div>
+        <div class="ok">Team HCP ${t.team_hcp}</div>
+      </div>
+    `).join("");
+  }
+
+  if(row.phase==="finished"){
+    status.textContent="Live loting afgerond.";
+  }
+}
+
+async function loadDrawState(){
+  const {data,error}=await window.supabaseClient
+    .from("draw_state")
+    .select("id,active,reveal_index,phase,draw_data,updated_at")
+    .eq("id",1)
+    .single();
+  if(error){console.error("load draw state",error);return;}
+  renderPublicDrawState(data);
+}
+
+function subscribeDrawState(){
+  window.supabaseClient
+    .channel("live-draw-state")
+    .on(
+      "postgres_changes",
+      {event:"UPDATE",schema:"public",table:"draw_state",filter:"id=eq.1"},
+      payload=>renderPublicDrawState(payload.new)
+    )
+    .subscribe();
+}
+
+async function startDraw(){
   if(!window.adminAuthenticated)return;
   const complete=window.currentPlayers.every(p=>p.exact_hcp!==null&&p.course_hcp!==null);
   if(!complete){alert("Vul eerst alle 12 handicaps in.");return;}
@@ -328,6 +448,9 @@ function startDraw(){
   document.getElementById("resetDrawBtn").disabled=false;
   document.getElementById("lockTeamsBtn").disabled=true;
   showPreReveal();
+
+  await pushDrawState(true,"pre_reveal",publicDrawPayload("pre_reveal",[]));
+
   const music=document.getElementById("drawMusic");
   music.currentTime=0;
   music.volume=.55;
@@ -340,7 +463,7 @@ function showPreReveal(){
   document.getElementById("womanName").textContent="????????";
   document.getElementById("teamHcpText").textContent="";
 }
-function revealNext(){
+async function revealNext(){
   const t=window.drawTeams[window.revealIndex];
   const music=document.getElementById("drawMusic");
   music.volume=.25;
@@ -349,14 +472,37 @@ function revealNext(){
   beep();
   setTimeout(()=>{music.volume=.55;},700);
 
+  const revealedTeams=window.drawTeams.slice(0,window.revealIndex+1);
+  await pushDrawState(true,"revealed",publicDrawPayload("revealed",revealedTeams));
+
   window.revealIndex++;
   if(window.revealIndex>=window.drawTeams.length){
     document.getElementById("nextRevealBtn").disabled=true;
     document.getElementById("lockTeamsBtn").disabled=false;
     renderTeams(window.drawTeams);
+    await pushDrawState(true,"finished",{
+      stage:"finished",
+      team_number:window.drawTeams.length,
+      man_name:t.player1.name,
+      woman_name:t.player2.name,
+      team_hcp:t.team_hcp,
+      player1_hcp:t.player1.course_hcp,
+      player2_hcp:t.player2.course_hcp,
+      revealed_teams:revealedTeams.map((x,i)=>({
+        team_number:i+1,
+        player1_name:x.player1.name,
+        player2_name:x.player2.name,
+        player1_hcp:x.player1.course_hcp,
+        player2_hcp:x.player2.course_hcp,
+        team_hcp:x.team_hcp
+      }))
+    });
     setTimeout(()=>{music.pause();music.currentTime=0;},1200);
   }else{
-    setTimeout(showPreReveal,1200);
+    setTimeout(async ()=>{
+      showPreReveal();
+      await pushDrawState(true,"pre_reveal",publicDrawPayload("pre_reveal",revealedTeams));
+    },1200);
   }
 }
 function beep(){
@@ -381,13 +527,30 @@ async function saveTeams(){
   }));
   const {error}=await window.supabaseClient.rpc("save_team_draw",{input_pin:window.adminPin,input_teams:payload});
   if(error){console.error(error);alert("Opslaan van de loting is niet gelukt.");return;}
-  window.currentTeams=[...window.drawTeams];
-  renderTeams(window.currentTeams);
+  await loadExistingTeams();
+  const finalPayload={
+    stage:"finished",
+    team_number:window.drawTeams.length,
+    man_name:window.drawTeams.at(-1)?.player1?.name || null,
+    woman_name:window.drawTeams.at(-1)?.player2?.name || null,
+    team_hcp:window.drawTeams.at(-1)?.team_hcp ?? null,
+    player1_hcp:window.drawTeams.at(-1)?.player1?.course_hcp ?? null,
+    player2_hcp:window.drawTeams.at(-1)?.player2?.course_hcp ?? null,
+    revealed_teams:window.drawTeams.map((x,i)=>({
+      team_number:i+1,
+      player1_name:x.player1.name,
+      player2_name:x.player2.name,
+      player1_hcp:x.player1.course_hcp,
+      player2_hcp:x.player2.course_hcp,
+      team_hcp:x.team_hcp
+    }))
+  };
+  await pushDrawState(true,"finished",finalPayload);
   alert("Teams zijn definitief opgeslagen.");
   document.getElementById("lockTeamsBtn").disabled=true;
   document.getElementById("resetDrawBtn").disabled=true;
 }
-function resetDraw(){
+async function resetDraw(){
   window.drawTeams=[];
   window.revealIndex=0;
   document.getElementById("drawStage").classList.add("hidden");
@@ -395,6 +558,119 @@ function resetDraw(){
   document.getElementById("nextRevealBtn").disabled=true;
   document.getElementById("lockTeamsBtn").disabled=true;
   const music=document.getElementById("drawMusic");music.pause();music.currentTime=0;
+  await pushDrawState(false,"idle",{stage:"idle",revealed_teams:[]});
+}
+
+
+window.pendingDay1Flights=[];
+
+function teamDisplay(team){
+  return `${team.player1.name} & ${team.player2.name}`;
+}
+
+async function flightAdminLogin(){
+  const pin=document.getElementById("flightAdminPin").value.trim();
+  if(!pin){alert("Vul de pincode in.");return;}
+  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
+  const status=document.getElementById("flightAdminStatus");
+  if(error||data!==true){
+    console.error(error);
+    status.textContent="Pincode niet juist.";
+    status.classList.add("error");
+    return;
+  }
+  window.adminPin=pin;
+  window.adminAuthenticated=true;
+  document.getElementById("adminPin").value=pin;
+  document.getElementById("adminStatus").textContent="Ingelogd als wedstrijdleiding.";
+  document.getElementById("adminStatus").classList.remove("error");
+  document.getElementById("drawControls").classList.remove("hidden");
+  status.textContent="Ingelogd als wedstrijdleiding.";
+  status.classList.remove("error");
+  document.getElementById("flightControls").classList.remove("hidden");
+}
+
+function renderDay1Flights(flights, isSaved=false){
+  const box=document.getElementById("day1Flights");
+  if(!flights||!flights.length){
+    box.innerHTML='<p class="muted">Nog geen flightindeling.</p>';
+    return;
+  }
+  const times=["13:30","13:42","13:54"];
+  box.innerHTML=flights.map((f,i)=>`
+    <div class="team-card" style="margin-bottom:10px">
+      <span class="label">Flight ${i+1} · ${times[i]}</span>
+      <strong>${teamDisplay(f[0])}</strong>
+      <div class="muted" style="margin:4px 0">met</div>
+      <strong>${teamDisplay(f[1])}</strong>
+      ${isSaved?'<div class="ok" style="margin-top:8px">Definitief</div>':''}
+    </div>
+  `).join("");
+}
+
+function makeDay1Flights(){
+  if(!window.adminAuthenticated){alert("Log eerst in als wedstrijdleiding.");return;}
+  if(!window.currentTeams||window.currentTeams.length!==6||window.currentTeams.some(t=>!t.id)){
+    alert("Maak eerst de 6 teams definitief bij de loting.");
+    return;
+  }
+  const shuffled=shuffle(window.currentTeams);
+  window.pendingDay1Flights=[
+    [shuffled[0],shuffled[1]],
+    [shuffled[2],shuffled[3]],
+    [shuffled[4],shuffled[5]]
+  ];
+  renderDay1Flights(window.pendingDay1Flights,false);
+  document.getElementById("reshuffleDay1Btn").disabled=false;
+  document.getElementById("saveDay1FlightsBtn").disabled=false;
+}
+
+async function saveDay1Flights(){
+  if(!window.adminAuthenticated||!window.adminPin){alert("Log eerst in als wedstrijdleiding.");return;}
+  if(!window.pendingDay1Flights.length){alert("Maak eerst een indeling.");return;}
+  const times=["13:30:00","13:42:00","13:54:00"];
+  const payload=window.pendingDay1Flights.map((f,i)=>({
+    flight_number:i+1,
+    team1_id:f[0].id,
+    team2_id:f[1].id,
+    start_time:times[i]
+  }));
+  const {error}=await window.supabaseClient.rpc("save_flights",{
+    input_pin:window.adminPin,
+    input_day:1,
+    input_flights:payload
+  });
+  if(error){
+    console.error(error);
+    alert("Opslaan van de flightindeling is niet gelukt.");
+    return;
+  }
+  await loadFlights();
+  document.getElementById("reshuffleDay1Btn").disabled=true;
+  document.getElementById("saveDay1FlightsBtn").disabled=true;
+  alert("Flightindeling dag 1 is definitief opgeslagen.");
+}
+
+async function loadFlights(){
+  if(!window.currentTeams||!window.currentTeams.length)return;
+  const {data,error}=await window.supabaseClient
+    .from("flights")
+    .select("id,day,flight_number,team1_id,team2_id,start_time")
+    .order("day")
+    .order("flight_number");
+  if(error){console.error(error);return;}
+
+  const d1=(data||[]).filter(f=>f.day===1);
+  if(d1.length){
+    const mapped=d1.map(f=>[
+      window.currentTeams.find(t=>t.id===f.team1_id),
+      window.currentTeams.find(t=>t.id===f.team2_id)
+    ]).filter(f=>f[0]&&f[1]);
+    if(mapped.length===3){
+      window.pendingDay1Flights=mapped;
+      renderDay1Flights(mapped,true);
+    }
+  }
 }
 
 document.getElementById("adminLoginBtn").addEventListener("click",adminLogin);
@@ -402,8 +678,14 @@ document.getElementById("startDrawBtn").addEventListener("click",startDraw);
 document.getElementById("nextRevealBtn").addEventListener("click",revealNext);
 document.getElementById("lockTeamsBtn").addEventListener("click",saveTeams);
 document.getElementById("resetDrawBtn").addEventListener("click",resetDraw);
+document.getElementById("flightAdminLoginBtn").addEventListener("click",flightAdminLogin);
+document.getElementById("makeDay1FlightsBtn").addEventListener("click",makeDay1Flights);
+document.getElementById("reshuffleDay1Btn").addEventListener("click",makeDay1Flights);
+document.getElementById("saveDay1FlightsBtn").addEventListener("click",saveDay1Flights);
 
 loadPlayers();
+loadDrawState();
+subscribeDrawState();
 </script>
 </body>
 </html>
