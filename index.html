@@ -61,6 +61,11 @@
     .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
     .hidden{display:none!important}
     .ok{color:var(--green-dark);font-weight:700}
+    .stand-table{width:100%;border-collapse:collapse;font-size:14px}
+    .stand-table th,.stand-table td{padding:9px 7px;border-top:1px solid #e3ddd2;text-align:right}
+    .stand-table th:first-child,.stand-table td:first-child,.stand-table th:nth-child(2),.stand-table td:nth-child(2){text-align:left}
+    .stand-table tr:first-child td{font-weight:700}
+    .stand-badge{display:inline-block;min-width:28px;text-align:center;font-weight:800;color:var(--green-dark)}
     @media(max-width:760px){
       .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
       .grid-2,.teams-grid{grid-template-columns:1fr}
@@ -143,7 +148,7 @@
 
   <section id="flights" class="panel card">
     <h2>Flightindeling</h2>
-    <p class="intro">Dag 1 wordt willekeurig ingedeeld in 3 flights van 2 teams. Dag 2 volgt later automatisch op basis van de stand.</p>
+    <p class="intro">Dag 1 wordt willekeurig ingedeeld. Dag 2 wordt automatisch gemaakt op basis van de definitieve stand van Dag 1.</p>
 
     <div class="admin-box">
       <label>
@@ -158,7 +163,9 @@
     <div id="flightControls" class="controls hidden">
       <button id="makeDay1FlightsBtn" class="btn">Maak indeling dag 1</button>
       <button id="reshuffleDay1Btn" class="btn secondary" disabled>Opnieuw indelen</button>
-      <button id="saveDay1FlightsBtn" class="btn warn" disabled>Indeling definitief maken</button>
+      <button id="saveDay1FlightsBtn" class="btn warn" disabled>Dag 1 definitief</button>
+      <button id="makeDay2FlightsBtn" class="btn">Maak flights dag 2</button>
+      <button id="saveDay2FlightsBtn" class="btn warn" disabled>Dag 2 definitief</button>
     </div>
 
     <div class="grid-2" style="margin-top:14px">
@@ -168,10 +175,8 @@
       </div>
       <div class="subcard">
         <h3>Dag 2</h3>
-        <p class="muted">Wordt na dag 1 automatisch opgebouwd als 6+5, 4+3 en 2+1.</p>
-        <p><strong>13:30</strong></p>
-        <p><strong>13:42</strong></p>
-        <p><strong>13:54</strong></p>
+        <p class="muted">Slechtste twee eerst, beste twee in de laatste flight.</p>
+        <div id="day2Flights"><p class="muted">Nog geen flightindeling.</p></div>
       </div>
     </div>
   </section>
@@ -220,8 +225,40 @@
 
   <section id="stand" class="panel card">
     <h2>Klassement</h2>
-    <p class="intro">Netto strokeplay over 36 holes. Laagste totaalscore wint.</p>
-    <div class="status">Dagstand en eindklassement volgen in de volgende stap.</div>
+    <p class="intro">Netto strokeplay. Een stand wordt voor deelnemers pas zichtbaar nadat de wedstrijdleiding hem publiceert.</p>
+
+    <div class="admin-box">
+      <label>
+        <span class="label">Pincode wedstrijdleiding</span>
+        <input id="standAdminPin" inputmode="numeric" type="password" placeholder="Pincode">
+      </label>
+      <button id="standAdminLoginBtn" class="btn">Inloggen</button>
+    </div>
+    <div id="standAdminStatus" class="status">Niet ingelogd als wedstrijdleiding.</div>
+
+    <div id="publicationControls" class="controls hidden">
+      <button id="publishDay1Btn" class="btn">Publiceer Dag 1</button>
+      <button id="publishDay2Btn" class="btn">Publiceer Dag 2</button>
+      <button id="publishTotalBtn" class="btn">Publiceer eindstand</button>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="subcard">
+        <h3>Dag 1</h3>
+        <div id="standDay1"><p class="muted">Stand nog niet gepubliceerd.</p></div>
+      </div>
+      <div class="subcard">
+        <h3>Dag 2</h3>
+        <div id="standDay2"><p class="muted">Stand nog niet gepubliceerd.</p></div>
+      </div>
+    </div>
+
+    <div class="subcard" style="margin-top:14px">
+      <h3>Eindklassement 36 holes</h3>
+      <div id="standTotal"><p class="muted">Eindstand nog niet gepubliceerd.</p></div>
+    </div>
+
+    <div id="standLiveStatus" class="status">Live klassement actief zodra de app is geladen.</div>
   </section>
 
   <div id="dbConnection" class="connection">Supabase: verbinden...</div>
@@ -363,6 +400,7 @@ async function loadExistingTeams(){
   renderTeams(teams);
   populateScoreTeams();
   await loadFlights();
+  await loadStandings();
 }
 async function adminLogin(){
   const pin=document.getElementById("adminPin").value.trim();
@@ -719,19 +757,271 @@ async function loadFlights(){
     .order("flight_number");
   if(error){console.error(error);return;}
 
-  const d1=(data||[]).filter(f=>f.day===1);
-  if(d1.length){
-    const mapped=d1.map(f=>[
-      window.currentTeams.find(t=>t.id===f.team1_id),
-      window.currentTeams.find(t=>t.id===f.team2_id)
-    ]).filter(f=>f[0]&&f[1]);
-    if(mapped.length===3){
-      window.pendingDay1Flights=mapped;
-      renderDay1Flights(mapped,true);
-    }
+  const mapDay=(day)=> (data||[]).filter(f=>f.day===day).map(f=>[
+    window.currentTeams.find(t=>t.id===f.team1_id),
+    window.currentTeams.find(t=>t.id===f.team2_id)
+  ]).filter(f=>f[0]&&f[1]);
+
+  const d1=mapDay(1);
+  if(d1.length===3){
+    window.pendingDay1Flights=d1;
+    renderDay1Flights(d1,true);
+  }
+
+  const d2=mapDay(2);
+  if(d2.length===3){
+    window.pendingDay2Flights=d2;
+    renderDay2Flights(d2,true);
   }
 }
 
+
+
+window.pendingDay2Flights=[];
+window.publicationSettings={publish_day1:false,publish_day2:false,publish_total:false};
+window.cachedStandings={day1:[],day2:[],total:[]};
+
+function renderDay2Flights(flights,isSaved=false){
+  const box=document.getElementById("day2Flights");
+  if(!box) return;
+  if(!flights||!flights.length){
+    box.innerHTML='<p class="muted">Nog geen flightindeling.</p>';
+    return;
+  }
+  const times=["13:30","13:42","13:54"];
+  box.innerHTML=flights.map((f,i)=>`
+    <div class="team-card" style="margin-bottom:10px">
+      <span class="label">Flight ${i+1} · ${times[i]}</span>
+      <strong>${teamDisplay(f[0])}</strong>
+      <div class="muted" style="margin:4px 0">met</div>
+      <strong>${teamDisplay(f[1])}</strong>
+      ${isSaved?'<div class="ok" style="margin-top:8px">Definitief</div>':''}
+    </div>
+  `).join("");
+}
+
+async function getStandingsForDay(day){
+  if(!window.currentTeams||window.currentTeams.length!==6) return [];
+  const {data,error}=await window.supabaseClient
+    .from("round_scores")
+    .select("team_id,day,hole,strokes,submitted")
+    .eq("day",day);
+  if(error){console.error(error);return [];}
+
+  const rows=data||[];
+  return window.currentTeams.map(team=>{
+    const teamRows=rows.filter(r=>Number(r.team_id)===team.id);
+    const valid=teamRows.filter(r=>Number.isFinite(Number(r.strokes)) && r.strokes!==null);
+    const complete=valid.length===18 && teamRows.length>=18 && teamRows.every(r=>r.submitted===true);
+    const gross=complete ? valid.reduce((s,r)=>s+Number(r.strokes),0) : null;
+    const net=complete ? gross-team.team_hcp : null;
+    return {team,gross,net,complete};
+  }).filter(x=>x.complete).sort((a,b)=>{
+    if(a.net!==b.net) return a.net-b.net;
+    if(a.gross!==b.gross) return a.gross-b.gross;
+    return a.team.id-b.team.id;
+  });
+}
+
+async function loadStandings(){
+  const d1=await getStandingsForDay(1);
+  const d2=await getStandingsForDay(2);
+
+  const total=window.currentTeams.map(team=>{
+    const a=d1.find(x=>x.team.id===team.id);
+    const b=d2.find(x=>x.team.id===team.id);
+    if(!a||!b) return null;
+    return {
+      team,
+      d1:a.net,
+      d2:b.net,
+      gross:a.gross+b.gross,
+      net:a.net+b.net,
+      complete:true
+    };
+  }).filter(Boolean).sort((a,b)=>{
+    if(a.net!==b.net) return a.net-b.net;
+    if(a.gross!==b.gross) return a.gross-b.gross;
+    return a.team.id-b.team.id;
+  });
+
+  window.cachedStandings={day1:d1,day2:d2,total};
+  renderStandings();
+}
+
+function rankLabel(i){
+  if(i===0) return "🥇";
+  if(i===1) return "🥈";
+  if(i===2) return "🥉";
+  return String(i+1);
+}
+
+function dayStandTable(rows){
+  if(!rows.length) return '<p class="muted">Nog geen 6 definitieve scorekaarten.</p>';
+  return `<div style="overflow-x:auto"><table class="stand-table">
+    <thead><tr><th>#</th><th>Team</th><th>Bruto</th><th>HCP</th><th>Netto</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr>
+      <td><span class="stand-badge">${rankLabel(i)}</span></td>
+      <td>${teamDisplay(r.team)}</td>
+      <td>${r.gross}</td>
+      <td>${r.team.team_hcp}</td>
+      <td><strong>${r.net}</strong></td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function totalStandTable(rows){
+  if(!rows.length) return '<p class="muted">Nog niet alle rondes zijn compleet.</p>';
+  return `<div style="overflow-x:auto"><table class="stand-table">
+    <thead><tr><th>#</th><th>Team</th><th>Dag 1</th><th>Dag 2</th><th>Totaal</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr>
+      <td><span class="stand-badge">${rankLabel(i)}</span></td>
+      <td>${teamDisplay(r.team)}</td>
+      <td>${r.d1}</td>
+      <td>${r.d2}</td>
+      <td><strong>${r.net}</strong></td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function renderStandings(){
+  const admin=window.adminAuthenticated===true;
+  const p=window.publicationSettings;
+  const d1Visible=admin||p.publish_day1;
+  const d2Visible=admin||p.publish_day2;
+  const totalVisible=admin||p.publish_total;
+
+  document.getElementById("standDay1").innerHTML=d1Visible
+    ? dayStandTable(window.cachedStandings.day1)
+    : '<p class="muted">Stand nog niet gepubliceerd.</p>';
+
+  document.getElementById("standDay2").innerHTML=d2Visible
+    ? dayStandTable(window.cachedStandings.day2)
+    : '<p class="muted">Stand nog niet gepubliceerd.</p>';
+
+  document.getElementById("standTotal").innerHTML=totalVisible
+    ? totalStandTable(window.cachedStandings.total)
+    : '<p class="muted">Eindstand nog niet gepubliceerd.</p>';
+
+  updatePublicationButtons();
+}
+
+function updatePublicationButtons(){
+  const p=window.publicationSettings;
+  const b1=document.getElementById("publishDay1Btn");
+  const b2=document.getElementById("publishDay2Btn");
+  const bt=document.getElementById("publishTotalBtn");
+  if(!b1||!b2||!bt) return;
+  b1.textContent=p.publish_day1?"Verberg Dag 1":"Publiceer Dag 1";
+  b2.textContent=p.publish_day2?"Verberg Dag 2":"Publiceer Dag 2";
+  bt.textContent=p.publish_total?"Verberg eindstand":"Publiceer eindstand";
+}
+
+async function loadPublicationSettings(){
+  const {data,error}=await window.supabaseClient
+    .from("settings")
+    .select("key,value")
+    .in("key",["publish_day1","publish_day2","publish_total"]);
+  if(error){console.error(error);return;}
+  (data||[]).forEach(r=>{
+    window.publicationSettings[r.key]=String(r.value).toLowerCase()==="true";
+  });
+  renderStandings();
+}
+
+function subscribeSettings(){
+  window.supabaseClient
+    .channel("live-publication-settings")
+    .on(
+      "postgres_changes",
+      {event:"*",schema:"public",table:"settings"},
+      async payload=>{
+        const row=payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
+        if(row && ["publish_day1","publish_day2","publish_total"].includes(row.key)){
+          await loadPublicationSettings();
+          const s=document.getElementById("standLiveStatus");
+          if(s) s.textContent="Publicatiestatus live bijgewerkt.";
+        }
+      }
+    )
+    .subscribe(status=>{
+      const s=document.getElementById("standLiveStatus");
+      if(s && status==="SUBSCRIBED") s.textContent="Live klassement actief.";
+    });
+}
+
+async function standAdminLogin(){
+  const pin=document.getElementById("standAdminPin").value.trim();
+  if(!pin){alert("Vul de pincode in.");return;}
+  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
+  const status=document.getElementById("standAdminStatus");
+  if(error||data!==true){
+    console.error(error);
+    status.textContent="Pincode niet juist.";
+    status.classList.add("error");
+    return;
+  }
+  window.adminPin=pin;
+  window.adminAuthenticated=true;
+  document.getElementById("adminPin").value=pin;
+  document.getElementById("flightAdminPin").value=pin;
+  status.textContent="Ingelogd als wedstrijdleiding.";
+  status.classList.remove("error");
+  document.getElementById("publicationControls").classList.remove("hidden");
+  document.getElementById("flightControls").classList.remove("hidden");
+  renderStandings();
+}
+
+async function togglePublication(key){
+  if(!window.adminAuthenticated||!window.adminPin){alert("Log eerst in als wedstrijdleiding.");return;}
+  const current=window.publicationSettings[key]===true;
+  const {error}=await window.supabaseClient.rpc("set_publication_setting",{
+    input_pin:window.adminPin,
+    input_key:key,
+    input_value:!current
+  });
+  if(error){console.error(error);alert("Publicatie aanpassen is niet gelukt.");return;}
+  await loadPublicationSettings();
+}
+
+async function makeDay2Flights(){
+  if(!window.adminAuthenticated){alert("Log eerst in als wedstrijdleiding.");return;}
+  const standings=await getStandingsForDay(1);
+  if(standings.length!==6){
+    alert("Dag 2 kan pas worden ingedeeld als alle 6 scorekaarten van Dag 1 definitief zijn.");
+    return;
+  }
+  // Standings is best -> worst. Dag 2 starts worst -> best.
+  const order=[...standings].reverse().map(x=>x.team);
+  window.pendingDay2Flights=[
+    [order[0],order[1]],
+    [order[2],order[3]],
+    [order[4],order[5]]
+  ];
+  renderDay2Flights(window.pendingDay2Flights,false);
+  document.getElementById("saveDay2FlightsBtn").disabled=false;
+}
+
+async function saveDay2Flights(){
+  if(!window.adminAuthenticated||!window.adminPin){alert("Log eerst in als wedstrijdleiding.");return;}
+  if(!window.pendingDay2Flights.length){alert("Maak eerst de indeling voor Dag 2.");return;}
+  const times=["13:30:00","13:42:00","13:54:00"];
+  const payload=window.pendingDay2Flights.map((f,i)=>({
+    flight_number:i+1,
+    team1_id:f[0].id,
+    team2_id:f[1].id,
+    start_time:times[i]
+  }));
+  const {error}=await window.supabaseClient.rpc("save_flights",{
+    input_pin:window.adminPin,
+    input_day:2,
+    input_flights:payload
+  });
+  if(error){console.error(error);alert("Opslaan van Dag 2 flights is niet gelukt.");return;}
+  await loadFlights();
+  document.getElementById("saveDay2FlightsBtn").disabled=true;
+  alert("Flightindeling Dag 2 is definitief opgeslagen.");
+}
 
 const courseHoles = [
   {hole:1, par:4, si:5, meters:375},
@@ -879,7 +1169,7 @@ async function saveHoleScore(event){
     if(existing){
       const {error}=await window.supabaseClient
         .from("round_scores")
-        .delete()
+        .update({strokes:null,submitted:false})
         .eq("id",existing.id);
       if(error){console.error(error);alert("Wissen van score is niet gelukt.");}
     }
@@ -921,12 +1211,12 @@ function subscribeScores(){
       async payload=>{
         const team=getSelectedScoreTeam();
         const day=Number(document.getElementById("scoreDaySelect").value);
-        if(!team) return;
         const changed=payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
-        if(changed && Number(changed.team_id)===team.id && Number(changed.day)===day){
+        if(team && changed && Number(changed.team_id)===team.id && Number(changed.day)===day){
           document.getElementById("scoreLiveStatus").textContent="Scorekaart live bijgewerkt.";
           await loadScorecard();
         }
+        await loadStandings();
       }
     )
     .subscribe(status=>{
@@ -945,15 +1235,24 @@ document.getElementById("flightAdminLoginBtn").addEventListener("click",flightAd
 document.getElementById("makeDay1FlightsBtn").addEventListener("click",makeDay1Flights);
 document.getElementById("reshuffleDay1Btn").addEventListener("click",makeDay1Flights);
 document.getElementById("saveDay1FlightsBtn").addEventListener("click",saveDay1Flights);
+document.getElementById("makeDay2FlightsBtn").addEventListener("click",makeDay2Flights);
+document.getElementById("saveDay2FlightsBtn").addEventListener("click",saveDay2Flights);
 document.getElementById("scoreTeamSelect").addEventListener("change",loadScorecard);
 document.getElementById("scoreDaySelect").addEventListener("change",loadScorecard);
 document.getElementById("submitScorecardBtn").addEventListener("click",submitScorecard);
+document.getElementById("standAdminLoginBtn").addEventListener("click",standAdminLogin);
+document.getElementById("publishDay1Btn").addEventListener("click",()=>togglePublication("publish_day1"));
+document.getElementById("publishDay2Btn").addEventListener("click",()=>togglePublication("publish_day2"));
+document.getElementById("publishTotalBtn").addEventListener("click",()=>togglePublication("publish_total"));
 
 loadPlayers();
 loadDrawState();
+loadPublicationSettings();
+loadStandings();
 subscribeDrawState();
 subscribeFlights();
 subscribeScores();
+subscribeSettings();
 </script>
 </body>
 </html>
