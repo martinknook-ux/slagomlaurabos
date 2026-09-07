@@ -153,6 +153,7 @@
       <button id="flightAdminLoginBtn" class="btn">Inloggen</button>
     </div>
     <div id="flightAdminStatus" class="status">Niet ingelogd als wedstrijdleiding.</div>
+    <div id="flightLiveStatus" class="status">Live flights: verbonden zodra de pagina is geladen.</div>
 
     <div id="flightControls" class="controls hidden">
       <button id="makeDay1FlightsBtn" class="btn">Maak indeling dag 1</button>
@@ -257,6 +258,7 @@ async function saveHandicap(event){
   await loadPlayers();
 loadDrawState();
 subscribeDrawState();
+subscribeFlights();
 }
 async function loadPlayers(){
   const {data,error}=await window.supabaseClient.from("players").select("id,name,sex,partner_name,exact_hcp,course_hcp").order("id");
@@ -651,6 +653,26 @@ async function saveDay1Flights(){
   alert("Flightindeling dag 1 is definitief opgeslagen.");
 }
 
+
+function subscribeFlights(){
+  window.supabaseClient
+    .channel("live-flights")
+    .on(
+      "postgres_changes",
+      {event:"*",schema:"public",table:"flights"},
+      async ()=>{
+        const s=document.getElementById("flightLiveStatus");
+        if(s) s.textContent="Flightindeling bijgewerkt.";
+        await loadFlights();
+      }
+    )
+    .subscribe(status=>{
+      const s=document.getElementById("flightLiveStatus");
+      if(!s) return;
+      if(status==="SUBSCRIBED") s.textContent="Live flights actief.";
+    });
+}
+
 async function loadFlights(){
   if(!window.currentTeams||!window.currentTeams.length)return;
   const {data,error}=await window.supabaseClient
@@ -686,6 +708,7 @@ document.getElementById("saveDay1FlightsBtn").addEventListener("click",saveDay1F
 loadPlayers();
 loadDrawState();
 subscribeDrawState();
+subscribeFlights();
 </script>
 </body>
 </html>
