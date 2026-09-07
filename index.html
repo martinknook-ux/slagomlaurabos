@@ -178,8 +178,44 @@
 
   <section id="scores" class="panel card">
     <h2>Scores</h2>
-    <p class="intro">Scramble à deux, één brutoscore per hole per team.</p>
-    <div class="status">Scorekaart volgt in de volgende stap.</div>
+    <p class="intro">Scramble à deux, één brutoscore per hole per team. Iedere wijziging wordt direct opgeslagen.</p>
+
+    <div class="grid-2">
+      <label>
+        <span class="label">Team</span>
+        <select id="scoreTeamSelect"></select>
+      </label>
+      <label>
+        <span class="label">Wedstrijddag</span>
+        <select id="scoreDaySelect">
+          <option value="1">Dag 1</option>
+          <option value="2">Dag 2</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="scoreSummary" class="status">Kies een team.</div>
+
+    <div style="overflow-x:auto;margin-top:14px">
+      <table style="width:100%;border-collapse:collapse;min-width:620px">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px">Hole</th>
+            <th style="padding:8px">Par</th>
+            <th style="padding:8px">SI</th>
+            <th style="padding:8px">Geel</th>
+            <th style="padding:8px">Score</th>
+          </tr>
+        </thead>
+        <tbody id="scoreTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="controls">
+      <button id="submitScorecardBtn" class="btn" disabled>Kaart definitief maken</button>
+    </div>
+
+    <div id="scoreLiveStatus" class="status">Live scores actief zodra de app is geladen.</div>
   </section>
 
   <section id="stand" class="panel card">
@@ -325,6 +361,7 @@ async function loadExistingTeams(){
   })).filter(t=>t.player1&&t.player2);
   window.currentTeams=teams;
   renderTeams(teams);
+  populateScoreTeams();
   await loadFlights();
 }
 async function adminLogin(){
@@ -695,6 +732,210 @@ async function loadFlights(){
   }
 }
 
+
+const courseHoles = [
+  {hole:1, par:4, si:5, meters:375},
+  {hole:2, par:3, si:17, meters:162},
+  {hole:3, par:5, si:7, meters:468},
+  {hole:4, par:4, si:15, meters:340},
+  {hole:5, par:4, si:3, meters:395},
+  {hole:6, par:4, si:11, meters:340},
+  {hole:7, par:4, si:1, meters:420},
+  {hole:8, par:3, si:9, meters:155},
+  {hole:9, par:5, si:13, meters:457},
+  {hole:10, par:3, si:16, meters:166},
+  {hole:11, par:4, si:6, meters:320},
+  {hole:12, par:4, si:4, meters:354},
+  {hole:13, par:4, si:12, meters:320},
+  {hole:14, par:4, si:14, meters:345},
+  {hole:15, par:5, si:8, meters:457},
+  {hole:16, par:4, si:2, meters:377},
+  {hole:17, par:3, si:18, meters:133},
+  {hole:18, par:5, si:10, meters:459}
+];
+
+window.currentScoreRows = [];
+window.scorecardSubmitted = false;
+
+function populateScoreTeams(){
+  const sel=document.getElementById("scoreTeamSelect");
+  if(!sel) return;
+  const previous=sel.value;
+  sel.innerHTML='<option value="">Kies team</option>';
+  (window.currentTeams||[]).forEach(t=>{
+    const o=document.createElement("option");
+    o.value=String(t.id);
+    o.textContent=teamDisplay(t);
+    sel.appendChild(o);
+  });
+  if(previous && [...sel.options].some(o=>o.value===previous)) sel.value=previous;
+}
+
+function getSelectedScoreTeam(){
+  const id=Number(document.getElementById("scoreTeamSelect").value);
+  return (window.currentTeams||[]).find(t=>t.id===id);
+}
+
+function renderScoreTable(){
+  const body=document.getElementById("scoreTableBody");
+  if(!body) return;
+  const team=getSelectedScoreTeam();
+  const rows=window.currentScoreRows||[];
+  const byHole=new Map(rows.map(r=>[r.hole,r]));
+  body.innerHTML=courseHoles.map(h=>{
+    const row=byHole.get(h.hole);
+    const val=row?.strokes ?? "";
+    const disabled=window.scorecardSubmitted ? "disabled" : "";
+    return `
+      <tr style="border-top:1px solid #e3ddd2">
+        <td style="padding:9px">${h.hole}</td>
+        <td style="padding:9px;text-align:center">${h.par}</td>
+        <td style="padding:9px;text-align:center">${h.si}</td>
+        <td style="padding:9px;text-align:center">${h.meters}</td>
+        <td style="padding:9px;text-align:center">
+          <input
+            class="holeScoreInput"
+            data-hole="${h.hole}"
+            inputmode="numeric"
+            type="number"
+            min="1"
+            max="20"
+            value="${val}"
+            ${disabled}
+            style="width:78px;text-align:center"
+          >
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  document.querySelectorAll(".holeScoreInput").forEach(inp=>{
+    inp.addEventListener("change",saveHoleScore);
+  });
+
+  renderScoreSummary();
+}
+
+function renderScoreSummary(){
+  const team=getSelectedScoreTeam();
+  const summary=document.getElementById("scoreSummary");
+  const submit=document.getElementById("submitScorecardBtn");
+  if(!team){
+    summary.textContent="Kies een team.";
+    submit.disabled=true;
+    return;
+  }
+  const completed=(window.currentScoreRows||[]).filter(r=>Number.isFinite(r.strokes)).length;
+  const gross=(window.currentScoreRows||[]).reduce((sum,r)=>sum+(Number(r.strokes)||0),0);
+  const net=completed===18 ? gross-team.team_hcp : null;
+  summary.innerHTML=`<strong>${teamDisplay(team)}</strong> · Team HCP ${team.team_hcp}<br>Bruto: <strong>${gross||"-"}</strong> · Netto: <strong>${net??"-"}</strong> · ${completed}/18 holes`;
+  if(window.scorecardSubmitted){
+    summary.innerHTML += '<br><span class="ok">Kaart is definitief.</span>';
+  }
+  submit.disabled=window.scorecardSubmitted || completed!==18;
+}
+
+async function loadScorecard(){
+  const team=getSelectedScoreTeam();
+  const day=Number(document.getElementById("scoreDaySelect").value);
+  if(!team){
+    window.currentScoreRows=[];
+    window.scorecardSubmitted=false;
+    renderScoreTable();
+    return;
+  }
+  const {data,error}=await window.supabaseClient
+    .from("round_scores")
+    .select("id,team_id,day,hole,strokes,submitted")
+    .eq("team_id",team.id)
+    .eq("day",day)
+    .order("hole");
+  if(error){
+    console.error(error);
+    document.getElementById("scoreLiveStatus").textContent="Laden van scores is niet gelukt.";
+    return;
+  }
+  window.currentScoreRows=data||[];
+  window.scorecardSubmitted=(data||[]).length>0 && (data||[]).every(r=>r.submitted===true);
+  renderScoreTable();
+}
+
+async function saveHoleScore(event){
+  const team=getSelectedScoreTeam();
+  const day=Number(document.getElementById("scoreDaySelect").value);
+  const hole=Number(event.target.dataset.hole);
+  const value=event.target.value.trim();
+  const strokes=value===""?null:Number(value);
+
+  if(!team) return;
+  if(strokes!==null && (!Number.isInteger(strokes)||strokes<1||strokes>20)){
+    alert("Voer een score in tussen 1 en 20.");
+    await loadScorecard();
+    return;
+  }
+
+  if(strokes===null){
+    const existing=(window.currentScoreRows||[]).find(r=>r.hole===hole);
+    if(existing){
+      const {error}=await window.supabaseClient
+        .from("round_scores")
+        .delete()
+        .eq("id",existing.id);
+      if(error){console.error(error);alert("Wissen van score is niet gelukt.");}
+    }
+  }else{
+    const {error}=await window.supabaseClient
+      .from("round_scores")
+      .upsert(
+        {team_id:team.id,day,hole,strokes,submitted:false},
+        {onConflict:"team_id,day,hole"}
+      );
+    if(error){console.error(error);alert("Opslaan van score is niet gelukt.");}
+  }
+  await loadScorecard();
+}
+
+async function submitScorecard(){
+  const team=getSelectedScoreTeam();
+  const day=Number(document.getElementById("scoreDaySelect").value);
+  if(!team) return;
+  const {error}=await window.supabaseClient.rpc("submit_scorecard",{
+    input_team_id:team.id,
+    input_day:day
+  });
+  if(error){
+    console.error(error);
+    alert("Kaart definitief maken is niet gelukt.");
+    return;
+  }
+  await loadScorecard();
+  alert("Scorekaart is definitief gemaakt.");
+}
+
+function subscribeScores(){
+  window.supabaseClient
+    .channel("live-round-scores")
+    .on(
+      "postgres_changes",
+      {event:"*",schema:"public",table:"round_scores"},
+      async payload=>{
+        const team=getSelectedScoreTeam();
+        const day=Number(document.getElementById("scoreDaySelect").value);
+        if(!team) return;
+        const changed=payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
+        if(changed && Number(changed.team_id)===team.id && Number(changed.day)===day){
+          document.getElementById("scoreLiveStatus").textContent="Scorekaart live bijgewerkt.";
+          await loadScorecard();
+        }
+      }
+    )
+    .subscribe(status=>{
+      if(status==="SUBSCRIBED"){
+        document.getElementById("scoreLiveStatus").textContent="Live scores actief.";
+      }
+    });
+}
+
 document.getElementById("adminLoginBtn").addEventListener("click",adminLogin);
 document.getElementById("startDrawBtn").addEventListener("click",startDraw);
 document.getElementById("nextRevealBtn").addEventListener("click",revealNext);
@@ -704,11 +945,15 @@ document.getElementById("flightAdminLoginBtn").addEventListener("click",flightAd
 document.getElementById("makeDay1FlightsBtn").addEventListener("click",makeDay1Flights);
 document.getElementById("reshuffleDay1Btn").addEventListener("click",makeDay1Flights);
 document.getElementById("saveDay1FlightsBtn").addEventListener("click",saveDay1Flights);
+document.getElementById("scoreTeamSelect").addEventListener("change",loadScorecard);
+document.getElementById("scoreDaySelect").addEventListener("change",loadScorecard);
+document.getElementById("submitScorecardBtn").addEventListener("click",submitScorecard);
 
 loadPlayers();
 loadDrawState();
 subscribeDrawState();
 subscribeFlights();
+subscribeScores();
 </script>
 </body>
 </html>
