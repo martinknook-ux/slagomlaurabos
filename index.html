@@ -96,6 +96,14 @@
       <div class="photo dine"><span>Dine</span></div>
       <div class="photo stay"><span>Stay</span></div>
     </div>
+
+    <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <strong>Weekend soundtrack</strong>
+        <div class="muted">Zet de muziek aan op je eigen apparaat.</div>
+      </div>
+      <button id="soundtrackBtn" class="btn secondary" style="margin-left:auto">Muziek aan</button>
+    </div>
   </section>
 
   <div class="tabs">
@@ -589,7 +597,7 @@ async function startDraw(){
   const music=document.getElementById("drawMusic");
   music.currentTime=0;
   music.volume=.55;
-  music.play().catch(()=>{});
+  music.play().then(updateSoundtrackButton).catch(()=>{});
 }
 function showPreReveal(){
   const t=window.drawTeams[window.revealIndex];
@@ -632,7 +640,7 @@ async function revealNext(){
         team_hcp:x.team_hcp
       }))
     });
-    setTimeout(()=>{music.pause();music.currentTime=0;},1200);
+    setTimeout(()=>{music.pause();music.currentTime=0;updateSoundtrackButton();},1200);
   }else{
     setTimeout(async ()=>{
       showPreReveal();
@@ -640,6 +648,38 @@ async function revealNext(){
     },1200);
   }
 }
+
+function updateSoundtrackButton(){
+  const btn=document.getElementById("soundtrackBtn");
+  const music=document.getElementById("drawMusic");
+  if(!btn || !music) return;
+  btn.textContent=music.paused ? "Muziek aan" : "Muziek uit";
+}
+
+async function toggleSoundtrack(){
+  const music=document.getElementById("drawMusic");
+  if(!music) return;
+
+  if(!music.paused){
+    music.pause();
+    updateSoundtrackButton();
+    return;
+  }
+
+  music.volume=.55;
+  if(music.ended || (Number.isFinite(music.duration) && music.currentTime >= music.duration - 1)){
+    music.currentTime=0;
+  }
+
+  try{
+    await music.play();
+  }catch(e){
+    console.error(e);
+    alert("De browser kon de muziek niet starten. Tik nogmaals op Muziek aan.");
+  }
+  updateSoundtrackButton();
+}
+
 function beep(){
   try{
     const Ctx=window.AudioContext||window.webkitAudioContext;
@@ -692,7 +732,7 @@ async function resetDraw(){
   document.getElementById("teamsGrid").innerHTML="";
   document.getElementById("nextRevealBtn").disabled=true;
   document.getElementById("lockTeamsBtn").disabled=true;
-  const music=document.getElementById("drawMusic");music.pause();music.currentTime=0;
+  const music=document.getElementById("drawMusic");music.pause();music.currentTime=0;updateSoundtrackButton();
   await pushDrawState(false,"idle",{stage:"idle",revealed_teams:[]});
 }
 
@@ -1492,6 +1532,8 @@ async function resetCompetition(clearHandicaps){
     : "De test-wedstrijddata is gewist.");
 }
 
+document.getElementById("soundtrackBtn").addEventListener("click",toggleSoundtrack);
+document.getElementById("drawMusic").addEventListener("ended",updateSoundtrackButton);
 document.getElementById("adminLoginBtn").addEventListener("click",adminLogin);
 document.getElementById("startDrawBtn").addEventListener("click",startDraw);
 document.getElementById("nextRevealBtn").addEventListener("click",revealNext);
