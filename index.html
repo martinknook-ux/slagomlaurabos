@@ -104,6 +104,7 @@
     <button class="tab" data-tab="flights">Flights</button>
     <button class="tab" data-tab="scores">Scores</button>
     <button class="tab" data-tab="stand">Stand</button>
+    <button class="tab" data-tab="beheer">Beheer</button>
   </div>
 
   <section id="spelers" class="panel active card">
@@ -267,6 +268,55 @@
     <div id="standLiveStatus" class="status">Live klassement actief zodra de app is geladen.</div>
   </section>
 
+  <section id="beheer" class="panel card">
+    <h2>Wedstrijdleiding / Beheer</h2>
+    <p class="intro">Alleen voor Martin en Carine. Gebruik dit scherm voor correcties en het opschonen van testdata.</p>
+
+    <div class="admin-box">
+      <label>
+        <span class="label">Pincode wedstrijdleiding</span>
+        <input id="beheerAdminPin" inputmode="numeric" type="password" placeholder="Pincode">
+      </label>
+      <button id="beheerAdminLoginBtn" class="btn">Inloggen</button>
+    </div>
+    <div id="beheerAdminStatus" class="status">Niet ingelogd als wedstrijdleiding.</div>
+
+    <div id="beheerControls" class="hidden" style="margin-top:16px">
+      <div class="subcard">
+        <h3>Scorekaart heropenen</h3>
+        <p class="muted">Gebruik dit als een definitieve scorekaart gecorrigeerd moet worden.</p>
+        <div class="grid-2">
+          <label>
+            <span class="label">Team</span>
+            <select id="beheerTeamSelect"></select>
+          </label>
+          <label>
+            <span class="label">Dag</span>
+            <select id="beheerDaySelect">
+              <option value="1">Dag 1</option>
+              <option value="2">Dag 2</option>
+            </select>
+          </label>
+        </div>
+        <div class="controls">
+          <button id="reopenScorecardBtn" class="btn secondary">Heropen scorekaart</button>
+        </div>
+      </div>
+
+      <div class="subcard" style="margin-top:14px">
+        <h3>Testwedstrijd resetten</h3>
+        <p class="muted">Wist loting, teams, flights, scores en publicaties. Namen en handicaps blijven staan.</p>
+        <button id="resetTestBtn" class="btn warn">Wis wedstrijddata</button>
+      </div>
+
+      <div class="subcard" style="margin-top:14px">
+        <h3>Klaarzetten voor het echte weekend</h3>
+        <p class="muted">Wist alle wedstrijddata én alle ingevulde handicaps. Foto's, muziek en appbestanden blijven staan.</p>
+        <button id="resetFullBtn" class="btn warn">Volledige reset</button>
+      </div>
+    </div>
+  </section>
+
   <div id="dbConnection" class="connection">Supabase: verbinden...</div>
 </main>
 
@@ -405,6 +455,7 @@ async function loadExistingTeams(){
   window.currentTeams=teams;
   renderTeams(teams);
   populateScoreTeams();
+  populateBeheerTeams();
   await loadFlights();
   await loadStandings();
   await loadBirdieStandings();
@@ -1301,6 +1352,146 @@ function subscribeScores(){
     });
 }
 
+
+function populateBeheerTeams(){
+  const sel=document.getElementById("beheerTeamSelect");
+  if(!sel) return;
+  const prev=sel.value;
+  sel.innerHTML='<option value="">Kies team</option>';
+  (window.currentTeams||[]).forEach(t=>{
+    const o=document.createElement("option");
+    o.value=String(t.id);
+    o.textContent=teamDisplay(t);
+    sel.appendChild(o);
+  });
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
+}
+
+async function beheerAdminLogin(){
+  const pin=document.getElementById("beheerAdminPin").value.trim();
+  if(!pin){alert("Vul de pincode in.");return;}
+  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
+  const status=document.getElementById("beheerAdminStatus");
+  if(error||data!==true){
+    console.error(error);
+    status.textContent="Pincode niet juist.";
+    status.classList.add("error");
+    return;
+  }
+
+  window.adminPin=pin;
+  window.adminAuthenticated=true;
+
+  ["adminPin","flightAdminPin","standAdminPin"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value=pin;
+  });
+
+  status.textContent="Ingelogd als wedstrijdleiding.";
+  status.classList.remove("error");
+  document.getElementById("beheerControls").classList.remove("hidden");
+  document.getElementById("drawControls")?.classList.remove("hidden");
+  document.getElementById("flightControls")?.classList.remove("hidden");
+  document.getElementById("publicationControls")?.classList.remove("hidden");
+  populateBeheerTeams();
+  renderStandings();
+}
+
+async function reopenSelectedScorecard(){
+  if(!window.adminAuthenticated||!window.adminPin){
+    alert("Log eerst in als wedstrijdleiding.");
+    return;
+  }
+  const teamId=Number(document.getElementById("beheerTeamSelect").value);
+  const day=Number(document.getElementById("beheerDaySelect").value);
+  if(!teamId){
+    alert("Kies eerst een team.");
+    return;
+  }
+
+  const team=(window.currentTeams||[]).find(t=>t.id===teamId);
+  if(!confirm(`Scorekaart van ${team?teamDisplay(team):"dit team"} voor Dag ${day} heropenen?`)) return;
+
+  const {error}=await window.supabaseClient.rpc("reopen_scorecard",{
+    input_pin:window.adminPin,
+    input_team_id:teamId,
+    input_day:day
+  });
+  if(error){
+    console.error(error);
+    alert("Heropenen is niet gelukt.");
+    return;
+  }
+
+  alert("Scorekaart is heropend.");
+  await loadStandings();
+  await loadBirdieStandings();
+
+  const selectedTeam=getSelectedScoreTeam();
+  const selectedDay=Number(document.getElementById("scoreDaySelect").value);
+  if(selectedTeam?.id===teamId && selectedDay===day){
+    await loadScorecard();
+  }
+}
+
+async function resetCompetition(clearHandicaps){
+  if(!window.adminAuthenticated||!window.adminPin){
+    alert("Log eerst in als wedstrijdleiding.");
+    return;
+  }
+
+  const firstMessage=clearHandicaps
+    ? "Hiermee wis je ALLE wedstrijddata én alle ingevulde handicaps. Dit is bedoeld om de app klaar te zetten voor het echte weekend."
+    : "Hiermee wis je alle lotingen, teams, flights, scores en gepubliceerde standen. Namen en handicaps blijven staan.";
+
+  if(!confirm(firstMessage)) return;
+
+  if(clearHandicaps){
+    const typed=prompt('Typ RESET om de volledige reset te bevestigen.');
+    if(typed!=="RESET"){
+      alert("Volledige reset geannuleerd.");
+      return;
+    }
+  }else{
+    if(!confirm("Weet je zeker dat je alle test-wedstrijddata wilt wissen?")) return;
+  }
+
+  const {error}=await window.supabaseClient.rpc("reset_competition",{
+    input_pin:window.adminPin,
+    input_clear_handicaps:clearHandicaps
+  });
+
+  if(error){
+    console.error(error);
+    alert("Resetten is niet gelukt.");
+    return;
+  }
+
+  window.currentTeams=[];
+  window.drawTeams=[];
+  window.pendingDay1Flights=[];
+  window.pendingDay2Flights=[];
+  window.currentScoreRows=[];
+  window.cachedStandings={day1:[],day2:[],total:[]};
+  window.cachedBirdies=[];
+
+  document.getElementById("teamsGrid").innerHTML="";
+  document.getElementById("day1Flights").innerHTML='<p class="muted">Nog geen flightindeling.</p>';
+  document.getElementById("day2Flights").innerHTML='<p class="muted">Nog geen flightindeling.</p>';
+  populateScoreTeams();
+  populateBeheerTeams();
+
+  await loadPlayers();
+  await loadDrawState();
+  await loadPublicationSettings();
+  await loadStandings();
+  await loadBirdieStandings();
+
+  alert(clearHandicaps
+    ? "De app is volledig klaargezet voor het echte weekend."
+    : "De test-wedstrijddata is gewist.");
+}
+
 document.getElementById("adminLoginBtn").addEventListener("click",adminLogin);
 document.getElementById("startDrawBtn").addEventListener("click",startDraw);
 document.getElementById("nextRevealBtn").addEventListener("click",revealNext);
@@ -1319,6 +1510,10 @@ document.getElementById("standAdminLoginBtn").addEventListener("click",standAdmi
 document.getElementById("publishDay1Btn").addEventListener("click",()=>togglePublication("publish_day1"));
 document.getElementById("publishDay2Btn").addEventListener("click",()=>togglePublication("publish_day2"));
 document.getElementById("publishTotalBtn").addEventListener("click",()=>togglePublication("publish_total"));
+document.getElementById("beheerAdminLoginBtn").addEventListener("click",beheerAdminLogin);
+document.getElementById("reopenScorecardBtn").addEventListener("click",reopenSelectedScorecard);
+document.getElementById("resetTestBtn").addEventListener("click",()=>resetCompetition(false));
+document.getElementById("resetFullBtn").addEventListener("click",()=>resetCompetition(true));
 
 loadPlayers();
 loadDrawState();
