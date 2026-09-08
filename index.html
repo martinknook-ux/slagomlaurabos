@@ -258,6 +258,12 @@
       <div id="standTotal"><p class="muted">Eindstand nog niet gepubliceerd.</p></div>
     </div>
 
+    <div class="subcard" style="margin-top:14px">
+      <h3>Birdieklassement</h3>
+      <p class="muted">Altijd live zichtbaar. Iedere hole met een bruto teamscore van één onder par of beter telt als 1 birdie.</p>
+      <div id="birdieStand"><p class="muted">Nog geen birdies geregistreerd.</p></div>
+    </div>
+
     <div id="standLiveStatus" class="status">Live klassement actief zodra de app is geladen.</div>
   </section>
 
@@ -401,6 +407,7 @@ async function loadExistingTeams(){
   populateScoreTeams();
   await loadFlights();
   await loadStandings();
+  await loadBirdieStandings();
 }
 async function adminLogin(){
   const pin=document.getElementById("adminPin").value.trim();
@@ -780,6 +787,7 @@ async function loadFlights(){
 window.pendingDay2Flights=[];
 window.publicationSettings={publish_day1:false,publish_day2:false,publish_total:false};
 window.cachedStandings={day1:[],day2:[],total:[]};
+window.cachedBirdies=[];
 
 function renderDay2Flights(flights,isSaved=false){
   const box=document.getElementById("day2Flights");
@@ -884,6 +892,71 @@ function totalStandTable(rows){
   </table></div>`;
 }
 
+
+async function loadBirdieStandings(){
+  if(!window.currentTeams||!window.currentTeams.length){
+    window.cachedBirdies=[];
+    renderBirdieStandings();
+    return;
+  }
+
+  const {data,error}=await window.supabaseClient
+    .from("round_scores")
+    .select("team_id,day,hole,strokes")
+    .in("day",[1,2]);
+
+  if(error){
+    console.error(error);
+    return;
+  }
+
+  const byHole=new Map(courseHoles.map(h=>[h.hole,h]));
+  window.cachedBirdies=window.currentTeams.map(team=>{
+    const teamRows=(data||[]).filter(r=>Number(r.team_id)===team.id && r.strokes!==null);
+    let d1=0,d2=0;
+
+    teamRows.forEach(r=>{
+      const hole=byHole.get(Number(r.hole));
+      if(!hole) return;
+      if(Number(r.strokes) <= hole.par-1){
+        if(Number(r.day)===1) d1++;
+        if(Number(r.day)===2) d2++;
+      }
+    });
+
+    return {team,d1,d2,total:d1+d2};
+  }).sort((a,b)=>{
+    if(a.total!==b.total) return b.total-a.total;
+    if(a.d2!==b.d2) return b.d2-a.d2;
+    if(a.d1!==b.d1) return b.d1-a.d1;
+    return a.team.id-b.team.id;
+  });
+
+  renderBirdieStandings();
+}
+
+function renderBirdieStandings(){
+  const box=document.getElementById("birdieStand");
+  if(!box) return;
+  const rows=window.cachedBirdies||[];
+
+  if(!rows.length || rows.every(r=>r.total===0)){
+    box.innerHTML='<p class="muted">Nog geen birdies geregistreerd.</p>';
+    return;
+  }
+
+  box.innerHTML=`<div style="overflow-x:auto"><table class="stand-table">
+    <thead><tr><th>#</th><th>Team</th><th>Dag 1</th><th>Dag 2</th><th>Totaal</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr>
+      <td><span class="stand-badge">${rankLabel(i)}</span></td>
+      <td>${teamDisplay(r.team)}</td>
+      <td>${r.d1}</td>
+      <td>${r.d2}</td>
+      <td><strong>${r.total}</strong></td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
 function renderStandings(){
   const admin=window.adminAuthenticated===true;
   const p=window.publicationSettings;
@@ -904,6 +977,7 @@ function renderStandings(){
     : '<p class="muted">Eindstand nog niet gepubliceerd.</p>';
 
   updatePublicationButtons();
+  renderBirdieStandings();
 }
 
 function updatePublicationButtons(){
@@ -1217,6 +1291,7 @@ function subscribeScores(){
           await loadScorecard();
         }
         await loadStandings();
+        await loadBirdieStandings();
       }
     )
     .subscribe(status=>{
@@ -1249,6 +1324,7 @@ loadPlayers();
 loadDrawState();
 loadPublicationSettings();
 loadStandings();
+loadBirdieStandings();
 subscribeDrawState();
 subscribeFlights();
 subscribeScores();
