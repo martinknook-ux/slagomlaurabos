@@ -360,22 +360,49 @@ function calculateTeamHcp(a,b){
   const vals=[a,b].sort((x,y)=>x-y);
   return Math.round((vals[0]*0.35)+(vals[1]*0.15));
 }
+
+function isCoachPlayer(player){
+  return player?.name==="Rieke";
+}
+function isCoachTeam(team){
+  if(!team) return false;
+  const names=[team.player1?.name,team.player2?.name];
+  return names.includes("Martin") && names.includes("Rieke");
+}
+function coachTeamHcp(team){
+  const martin=[team.player1,team.player2].find(p=>p?.name==="Martin");
+  return martin?.course_hcp ?? team.team_hcp ?? null;
+}
+function teamModeLabel(team){
+  return isCoachTeam(team) ? "Solo strokeplay · Rieke is coach" : "Scramble à deux";
+}
 function renderPlayers(players){
   const list=document.getElementById("playersList");
   list.innerHTML="";
   players.forEach(player=>{
     const row=document.createElement("div");
     row.className="player-row";
-    row.innerHTML=`
-      <div>
-        <div class="player-name">${player.name}</div>
-        <div class="muted">${player.sex==="M"?"Man · geel":"Vrouw · rood"} · partner: ${player.partner_name}</div>
-      </div>
-      <label><span class="label">Exact HCP</span>
-        <input class="hcp-input" inputmode="decimal" data-id="${player.id}" value="${player.exact_hcp??""}" placeholder="bijv. 18,4">
-      </label>
-      <div><span class="label">Baan HCP</span><div class="value">${player.course_hcp??"-"}</div></div>
-    `;
+    if(isCoachPlayer(player)){
+      row.innerHTML=`
+        <div>
+          <div class="player-name">${player.name}</div>
+          <div class="muted">Coach van Martin · speelt niet mee</div>
+        </div>
+        <div><span class="label">Rol</span><div class="value">Coach</div></div>
+        <div><span class="label">Baan HCP</span><div class="value">n.v.t.</div></div>
+      `;
+    }else{
+      row.innerHTML=`
+        <div>
+          <div class="player-name">${player.name}</div>
+          <div class="muted">${player.sex==="M"?"Man · geel":"Vrouw · rood"} · partner: ${player.partner_name}</div>
+        </div>
+        <label><span class="label">Exact HCP</span>
+          <input class="hcp-input" inputmode="decimal" data-id="${player.id}" value="${player.exact_hcp??""}" placeholder="bijv. 18,4">
+        </label>
+        <div><span class="label">Baan HCP</span><div class="value">${player.course_hcp??"-"}</div></div>
+      `;
+    }
     list.appendChild(row);
   });
   document.querySelectorAll(".hcp-input").forEach(input=>input.addEventListener("change",saveHandicap));
@@ -406,8 +433,9 @@ async function loadPlayers(){
   }
   window.currentPlayers=data;
   renderPlayers(data);
-  const completed=data.filter(p=>p.exact_hcp!==null&&p.course_hcp!==null).length;
-  status.textContent=`Handicaps ingevuld: ${completed} / ${data.length}`;
+  const playingPlayers=data.filter(p=>!isCoachPlayer(p));
+  const completed=playingPlayers.filter(p=>p.exact_hcp!==null&&p.course_hcp!==null).length;
+  status.textContent=`Handicaps ingevuld: ${completed} / ${playingPlayers.length} spelers · Rieke is coach`;
   status.classList.remove("error");
   connection.textContent=`Supabase verbonden · ${data.length} spelers gevonden`;
   await loadExistingTeams();
@@ -421,15 +449,32 @@ function shuffle(arr){
   return a;
 }
 function createValidDraw(){
-  const men=window.currentPlayers.filter(p=>p.sex==="M");
-  const women=window.currentPlayers.filter(p=>p.sex==="V");
+  const martin=window.currentPlayers.find(p=>p.name==="Martin");
+  const rieke=window.currentPlayers.find(p=>p.name==="Rieke");
+  if(!martin || !rieke) return null;
+
+  const men=window.currentPlayers.filter(p=>p.sex==="M" && p.name!=="Martin");
+  const women=window.currentPlayers.filter(p=>p.sex==="V" && p.name!=="Rieke");
+
   for(let n=0;n<1000;n++){
     const shuffledWomen=shuffle(women);
     if(men.every((m,i)=>m.partner_name!==shuffledWomen[i].name)){
-      return men.map((m,i)=>({
+      const normalTeams=men.map((m,i)=>({
         player1:m,
         player2:shuffledWomen[i],
         team_hcp:calculateTeamHcp(m.course_hcp,shuffledWomen[i].course_hcp),
+        mode:"scramble"
+      }));
+
+      const coachTeam={
+        player1:martin,
+        player2:rieke,
+        team_hcp:martin.course_hcp,
+        mode:"solo_coach"
+      };
+
+      return shuffle([...normalTeams,coachTeam]).map((team,i)=>({
+        ...team,
         draw_order:i+1
       }));
     }
@@ -442,7 +487,11 @@ function renderTeams(teams){
   teams.forEach((t,i)=>{
     const d=document.createElement("div");
     d.className="team-card";
-    d.innerHTML=`<span class="label">Team ${i+1}</span><strong>${t.player1.name} & ${t.player2.name}</strong><div class="muted">Baan HCP ${t.player1.course_hcp} + ${t.player2.course_hcp}</div><div class="ok">Team HCP ${t.team_hcp}</div>`;
+    if(isCoachTeam(t)){
+      d.innerHTML=`<span class="label">Team ${i+1}</span><strong>Martin & Rieke (coach)</strong><div class="muted">Solo strokeplay · Martin speelt één bal</div><div class="ok">Team HCP ${t.team_hcp} · Martins baan-HCP</div>`;
+    }else{
+      d.innerHTML=`<span class="label">Team ${i+1}</span><strong>${t.player1.name} & ${t.player2.name}</strong><div class="muted">Baan HCP ${t.player1.course_hcp} + ${t.player2.course_hcp}</div><div class="ok">Team HCP ${t.team_hcp}</div>`;
+    }
     grid.appendChild(d);
   });
 }
@@ -496,13 +545,15 @@ function publicDrawPayload(stage, revealedTeams=[]){
     team_hcp: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.team_hcp ?? null) : null,
     player1_hcp: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.player1?.course_hcp ?? null) : null,
     player2_hcp: stage==="revealed" ? (window.drawTeams[window.revealIndex]?.player2?.course_hcp ?? null) : null,
+    coach_team: stage==="revealed" ? isCoachTeam(window.drawTeams[window.revealIndex]) : false,
     revealed_teams: revealedTeams.map((t,i)=>({
       team_number:i+1,
       player1_name:t.player1.name,
       player2_name:t.player2.name,
       player1_hcp:t.player1.course_hcp,
       player2_hcp:t.player2.course_hcp,
-      team_hcp:t.team_hcp
+      team_hcp:t.team_hcp,
+      coach_team:isCoachTeam(t)
     }))
   };
 }
@@ -536,16 +587,20 @@ function renderPublicDrawState(row){
   document.getElementById("manName").textContent=d.man_name || "";
   document.getElementById("womanName").textContent=d.woman_name || "????????";
   document.getElementById("teamHcpText").textContent=
-    d.team_hcp!=null ? `Team HCP ${d.team_hcp} · ${d.player1_hcp} + ${d.player2_hcp}` : "";
+    d.team_hcp!=null
+      ? (d.coach_team
+          ? `Solo strokeplay · Rieke coach · Team HCP ${d.team_hcp}`
+          : `Team HCP ${d.team_hcp} · ${d.player1_hcp} + ${d.player2_hcp}`)
+      : "";
 
   if(Array.isArray(d.revealed_teams) && d.revealed_teams.length){
     const grid=document.getElementById("teamsGrid");
     grid.innerHTML=d.revealed_teams.map(t=>`
       <div class="team-card">
         <span class="label">Team ${t.team_number}</span>
-        <strong>${t.player1_name} & ${t.player2_name}</strong>
-        <div class="muted">Baan HCP ${t.player1_hcp} + ${t.player2_hcp}</div>
-        <div class="ok">Team HCP ${t.team_hcp}</div>
+        <strong>${t.coach_team ? `${t.player1_name} & ${t.player2_name} (coach)` : `${t.player1_name} & ${t.player2_name}`}</strong>
+        <div class="muted">${t.coach_team ? "Solo strokeplay · één bal" : `Baan HCP ${t.player1_hcp} + ${t.player2_hcp}`}</div>
+        <div class="ok">Team HCP ${t.team_hcp}${t.coach_team ? " · Martins baan-HCP" : ""}</div>
       </div>
     `).join("");
   }
@@ -578,8 +633,10 @@ function subscribeDrawState(){
 
 async function startDraw(){
   if(!window.adminAuthenticated)return;
-  const complete=window.currentPlayers.every(p=>p.exact_hcp!==null&&p.course_hcp!==null);
-  if(!complete){alert("Vul eerst alle 12 handicaps in.");return;}
+  const complete=window.currentPlayers
+    .filter(p=>!isCoachPlayer(p))
+    .every(p=>p.exact_hcp!==null&&p.course_hcp!==null);
+  if(!complete){alert("Vul eerst de handicaps van alle 11 spelers in. Rieke is coach en heeft geen handicap nodig.");return;}
   const teams=createValidDraw();
   if(!teams){alert("Er kon geen geldige loting worden gemaakt.");return;}
   window.drawTeams=teams;
@@ -610,8 +667,10 @@ async function revealNext(){
   const t=window.drawTeams[window.revealIndex];
   const music=document.getElementById("drawMusic");
   music.volume=.25;
-  document.getElementById("womanName").textContent=t.player2.name;
-  document.getElementById("teamHcpText").textContent=`Team HCP ${t.team_hcp} · ${t.player1.course_hcp} + ${t.player2.course_hcp}`;
+  document.getElementById("womanName").textContent=isCoachTeam(t) ? `${t.player2.name} (coach)` : t.player2.name;
+  document.getElementById("teamHcpText").textContent=isCoachTeam(t)
+    ? `Solo strokeplay · Martin speelt één bal · Team HCP ${t.team_hcp}`
+    : `Team HCP ${t.team_hcp} · ${t.player1.course_hcp} + ${t.player2.course_hcp}`;
   beep();
   setTimeout(()=>{music.volume=.55;},700);
 
@@ -631,13 +690,15 @@ async function revealNext(){
       team_hcp:t.team_hcp,
       player1_hcp:t.player1.course_hcp,
       player2_hcp:t.player2.course_hcp,
+      coach_team:isCoachTeam(t),
       revealed_teams:revealedTeams.map((x,i)=>({
         team_number:i+1,
         player1_name:x.player1.name,
         player2_name:x.player2.name,
         player1_hcp:x.player1.course_hcp,
         player2_hcp:x.player2.course_hcp,
-        team_hcp:x.team_hcp
+        team_hcp:x.team_hcp,
+        coach_team:isCoachTeam(x)
       }))
     });
     setTimeout(()=>{music.pause();music.currentTime=0;updateSoundtrackButton();},1200);
@@ -711,13 +772,15 @@ async function saveTeams(){
     team_hcp:window.drawTeams.at(-1)?.team_hcp ?? null,
     player1_hcp:window.drawTeams.at(-1)?.player1?.course_hcp ?? null,
     player2_hcp:window.drawTeams.at(-1)?.player2?.course_hcp ?? null,
+    coach_team:isCoachTeam(window.drawTeams.at(-1)),
     revealed_teams:window.drawTeams.map((x,i)=>({
       team_number:i+1,
       player1_name:x.player1.name,
       player2_name:x.player2.name,
       player1_hcp:x.player1.course_hcp,
       player2_hcp:x.player2.course_hcp,
-      team_hcp:x.team_hcp
+      team_hcp:x.team_hcp,
+      coach_team:isCoachTeam(x)
     }))
   };
   await pushDrawState(true,"finished",finalPayload);
@@ -740,7 +803,9 @@ async function resetDraw(){
 window.pendingDay1Flights=[];
 
 function teamDisplay(team){
-  return `${team.player1.name} & ${team.player2.name}`;
+  return isCoachTeam(team)
+    ? "Martin & Rieke (coach)"
+    : `${team.player1.name} & ${team.player2.name}`;
 }
 
 async function flightAdminLogin(){
@@ -1283,7 +1348,7 @@ function renderScoreSummary(){
   const completed=(window.currentScoreRows||[]).filter(r=>Number.isFinite(r.strokes)).length;
   const gross=(window.currentScoreRows||[]).reduce((sum,r)=>sum+(Number(r.strokes)||0),0);
   const net=completed===18 ? gross-team.team_hcp : null;
-  summary.innerHTML=`<strong>${teamDisplay(team)}</strong> · Team HCP ${team.team_hcp}<br>Bruto: <strong>${gross||"-"}</strong> · Netto: <strong>${net??"-"}</strong> · ${completed}/18 holes`;
+  summary.innerHTML=`<strong>${teamDisplay(team)}</strong> · ${isCoachTeam(team) ? "Solo strokeplay · " : ""}Team HCP ${team.team_hcp}<br>Bruto: <strong>${gross||"-"}</strong> · Netto: <strong>${net??"-"}</strong> · ${completed}/18 holes${isCoachTeam(team) ? "<br><span class=\"muted\">Martin speelt één bal. Rieke coacht.</span>" : ""}`;
   if(window.scorecardSubmitted){
     summary.innerHTML += '<br><span class="ok">Kaart is definitief.</span>';
   }
