@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Laurabos">
   <title>Slag om Laurabos 2026</title>
   <style>
     :root{
@@ -74,6 +77,22 @@
       .photo{min-height:170px}
       .admin-box{grid-template-columns:1fr}
     }
+    .score-holes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
+    .score-hole-card{border:1px solid var(--sand-dark);border-radius:14px;padding:16px;background:#fbf9f4;min-width:0}
+    .score-hole-top{display:flex;justify-content:space-between;gap:8px;color:var(--green-dark);margin-bottom:8px}
+    .score-hole-control{display:grid;grid-template-columns:52px minmax(0,1fr) 52px;gap:10px;align-items:center;margin-top:12px}
+    .score-hole-control button{height:52px;border:1px solid var(--green-dark);border-radius:10px;background:white;color:var(--green-dark);font-size:26px;cursor:pointer}
+    .score-hole-control input{height:52px;text-align:center;font-size:24px;font-weight:700;width:100%;min-width:0}
+    .score-hole-control button:disabled{opacity:.45;cursor:default}
+    @media(max-width:540px){.score-holes-grid{grid-template-columns:1fr}}
+    .home-help{margin:0 0 18px;border:1px solid var(--sand-dark);border-radius:12px;background:#fbf9f4;overflow:hidden}
+    .home-help summary{padding:13px 16px;color:var(--green-dark);font-weight:700;cursor:pointer;min-height:44px}
+    .home-help summary:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+    .home-help-content{padding:0 16px 16px;line-height:1.6}
+    .home-help-content ol{padding-left:24px;margin:8px 0 12px}
+    .home-help-content li{margin:8px 0}
+    .share-icon{width:24px;height:28px;vertical-align:middle;margin:0 4px;color:var(--green-dark)}
+    .home-help-content p{margin:8px 0 0}
   </style>
 </head>
 <body>
@@ -85,6 +104,22 @@
 
 <main class="wrap">
   <section class="card">
+    <details class="home-help">
+      <summary>Zet op je beginscherm</summary>
+      <div class="home-help-content">
+        <strong>Zo werkt het op je iPhone</strong>
+        <ol>
+          <li>Open deze website in <strong>Safari</strong>.</li>
+          <li>Tik op het <strong>deelicoon</strong>
+            <svg class="share-icon" viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Vierkant met een pijl omhoog"><path d="M12 18V2m-5 5 5-5 5 5M7 11H3v14h18V11h-4"/></svg>.
+            Staat het niet in beeld? Open eerst het menu met de drie puntjes en kies <strong>Deel</strong>.</li>
+          <li>Kies <strong>‘Zet op beginscherm’</strong>. Scrol zo nodig naar beneden in het deelmenu.</li>
+          <li>Laat <strong>‘Open als webapp’</strong> aan staan als je die optie ziet, en tik op <strong>‘Voeg toe’</strong>.</li>
+        </ol>
+        <p>Daarna open je Laurabos via het icoon op je beginscherm.</p>
+        <p class="muted">De plek van de knoppen kan per iOS-versie verschillen. Zie je ‘Zet op beginscherm’ niet? Kijk onder ‘Wijzig taken’ in het deelmenu.</p>
+      </div>
+    </details>
     <div class="summary">
       <div class="item"><span class="label">Datum</span><span class="value">9 - 11 oktober</span></div>
       <div class="item"><span class="label">Teams</span><span class="value">6 x 2 spelers</span></div>
@@ -210,20 +245,7 @@
 
     <div id="scoreSummary" class="status">Kies een team.</div>
 
-    <div style="overflow-x:auto;margin-top:14px">
-      <table style="width:100%;border-collapse:collapse;min-width:620px">
-        <thead>
-          <tr>
-            <th style="text-align:left;padding:8px">Hole</th>
-            <th style="padding:8px">Par</th>
-            <th style="padding:8px">SI</th>
-            <th style="padding:8px">Geel</th>
-            <th style="padding:8px">Score</th>
-          </tr>
-        </thead>
-        <tbody id="scoreTableBody"></tbody>
-      </table>
-    </div>
+    <div id="scoreTableBody" class="score-holes-grid"></div>
 
     <div class="controls">
       <button id="submitScorecardBtn" class="btn" disabled>Kaart definitief maken</button>
@@ -1296,41 +1318,55 @@ function getSelectedScoreTeam(){
   return (window.currentTeams||[]).find(t=>t.id===id);
 }
 
+function teamStrokesOnHole(teamHcp, strokeIndex){
+  if(teamHcp===null || teamHcp===undefined || teamHcp==="") return null;
+  const handicap=Number(teamHcp);
+  if(!Number.isInteger(handicap)) return null;
+  const absolute=Math.abs(handicap);
+  const base=Math.floor(absolute/18);
+  const extra=absolute%18;
+  return handicap>=0
+    ? base+(strokeIndex<=extra ? 1 : 0)
+    : -(base+(strokeIndex>18-extra ? 1 : 0));
+}
+
 function renderScoreTable(){
   const body=document.getElementById("scoreTableBody");
   if(!body) return;
   const team=getSelectedScoreTeam();
   const rows=window.currentScoreRows||[];
   const byHole=new Map(rows.map(r=>[r.hole,r]));
+  if(!team){
+    body.innerHTML="";
+    renderScoreSummary();
+    return;
+  }
   body.innerHTML=courseHoles.map(h=>{
-    const row=byHole.get(h.hole);
-    const val=row?.strokes ?? "";
+    const val=byHole.get(h.hole)?.strokes ?? "";
+    const received=teamStrokesOnHole(team.team_hcp,h.si);
     const disabled=window.scorecardSubmitted ? "disabled" : "";
-    return `
-      <tr style="border-top:1px solid #e3ddd2">
-        <td style="padding:9px">${h.hole}</td>
-        <td style="padding:9px;text-align:center">${h.par}</td>
-        <td style="padding:9px;text-align:center">${h.si}</td>
-        <td style="padding:9px;text-align:center">${h.meters}</td>
-        <td style="padding:9px;text-align:center">
-          <input
-            class="holeScoreInput"
-            data-hole="${h.hole}"
-            inputmode="numeric"
-            type="number"
-            min="1"
-            max="20"
-            value="${val}"
-            ${disabled}
-            style="width:78px;text-align:center"
-          >
-        </td>
-      </tr>
-    `;
+    return `<article class="score-hole-card">
+      <div class="score-hole-top"><strong>Hole ${h.hole}</strong><span>Par ${h.par} · SI ${h.si}</span></div>
+      <div class="muted">Geel: ${h.meters} meter</div>
+      <div class="muted">Slagen mee: <strong>${received===null ? "–" : received>0 ? "+"+received : received}</strong></div>
+      <div class="score-hole-control">
+        <button type="button" data-hole="${h.hole}" data-step="-1" aria-label="Eén slag minder op hole ${h.hole}" ${disabled}>−</button>
+        <input class="holeScoreInput" data-hole="${h.hole}" inputmode="numeric" type="number" min="1" max="20" step="1" value="${val}" placeholder="–" aria-label="Brutoscore hole ${h.hole}" ${disabled}>
+        <button type="button" data-hole="${h.hole}" data-step="1" aria-label="Eén slag meer op hole ${h.hole}" ${disabled}>+</button>
+      </div>
+    </article>`;
   }).join("");
-
-  document.querySelectorAll(".holeScoreInput").forEach(inp=>{
+  body.querySelectorAll(".holeScoreInput").forEach(inp=>{
     inp.addEventListener("change",saveHoleScore);
+  });
+  body.querySelectorAll("[data-step]").forEach(button=>{
+    button.addEventListener("click",()=>{
+      const input=body.querySelector(`input[data-hole="${button.dataset.hole}"]`);
+      const hole=courseHoles.find(h=>h.hole===Number(button.dataset.hole));
+      const current=Number(input.value)||hole.par;
+      input.value=Math.max(1,Math.min(20,current+Number(button.dataset.step)));
+      input.dispatchEvent(new Event("change"));
+    });
   });
 
   renderScoreSummary();
