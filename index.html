@@ -1406,7 +1406,13 @@ function renderScoreSummary(){
 }
 
 let scoreLoadSequence=0;
-async function loadScorecard(){
+let scoreWritesInFlight=0;
+function scoreInputActive(){
+  return scoreWritesInFlight>0 || !!document.activeElement?.closest("#scoreTableBody");
+}
+async function loadScorecard(background=false){
+  background=background===true;
+  if(background&&scoreInputActive())return;
   const sequence=++scoreLoadSequence;
   const team=getSelectedScoreTeam();
   const day=Number(document.getElementById("scoreDaySelect").value);
@@ -1428,12 +1434,20 @@ async function loadScorecard(){
     document.getElementById("scoreLiveStatus").textContent="Laden van scores is niet gelukt.";
     return;
   }
+  if(background&&scoreInputActive())return;
+  if(background&&JSON.stringify(window.currentScoreRows)===JSON.stringify(data||[]))return;
   window.currentScoreRows=data||[];
+  document.getElementById("scoreLiveStatus").textContent="Scorekaart bijgewerkt.";
   window.scorecardSubmitted=(data||[]).length>0 && (data||[]).every(r=>r.submitted===true);
   renderScoreTable();
 }
 
 async function saveHoleScore(event){
+  scoreWritesInFlight++;
+  try{await persistHoleScore(event);}
+  finally{scoreWritesInFlight--;}
+}
+async function persistHoleScore(event){
   const team=getSelectedScoreTeam();
   const day=Number(document.getElementById("scoreDaySelect").value);
   const hole=Number(event.target.dataset.hole);
@@ -1485,29 +1499,27 @@ async function submitScorecard(){
   alert("Scorekaart is definitief gemaakt.");
 }
 
+function refreshVisibleScorecard(){
+  if(document.visibilityState==="hidden" || !document.getElementById("scores").classList.contains("active") || !getSelectedScoreTeam())return;
+  return loadScorecard(true).catch(error=>{
+    console.error(error);
+    document.getElementById("scoreLiveStatus").textContent="Scores konden niet worden vernieuwd; de app probeert het opnieuw.";
+  });
+}
 function subscribeScores(){
-  window.supabaseClient
-    .channel("live-round-scores")
-    .on(
-      "postgres_changes",
-      {event:"*",schema:"public",table:"round_scores"},
-      async payload=>{
-        const team=getSelectedScoreTeam();
-        const day=Number(document.getElementById("scoreDaySelect").value);
-        const changed=payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
-        if(team && changed && Number(changed.team_id)===team.id && Number(changed.day)===day){
-          document.getElementById("scoreLiveStatus").textContent="Scorekaart live bijgewerkt.";
-          await loadScorecard();
-        }
-        await loadStandings();
-        await loadBirdieStandings();
-      }
-    )
-    .subscribe(status=>{
-      if(status==="SUBSCRIBED"){
-        document.getElementById("scoreLiveStatus").textContent="Live scores actief.";
-      }
-    });
+  if(window.scoreSubscription)return;
+  window.scoreSubscription=window.supabaseClient.channel("live-round-scores")
+    .on("postgres_changes",{event:"*",schema:"public",table:"round_scores"},async()=>{
+      await refreshVisibleScorecard();
+      await loadStandings();
+      await loadBirdieStandings();
+    })
+    .subscribe(status=>{if(status==="SUBSCRIBED")refreshVisibleScorecard();});
+  document.addEventListener("visibilitychange",refreshVisibleScorecard);
+  window.addEventListener("pageshow",refreshVisibleScorecard);
+  window.addEventListener("online",refreshVisibleScorecard);
+  document.querySelector('[data-tab="scores"]').addEventListener("click",refreshVisibleScorecard);
+  window.setInterval(refreshVisibleScorecard,5000);
 }
 
 
