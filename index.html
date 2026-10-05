@@ -312,16 +312,6 @@
     <div id="beheerAdminStatus" class="status">Niet ingelogd als wedstrijdleiding.</div>
 
     <div id="beheerControls" class="hidden" style="margin-top:16px">
-      <div class="subcard" style="margin-bottom:14px">
-        <h3>Flightindeling aanpassen</h3>
-        <p class="muted">Wissel complete teams tussen flights, bijvoorbeeld om de beschikbare buggy's te verdelen. Teams en starttijden blijven intact. Voor dag 2 kun je hiermee afwijken van de volgorde op basis van de stand.</p>
-        <label><span class="label">Wedstrijddag</span><select id="editFlightDay"><option value="1">Dag 1</option><option value="2">Dag 2</option></select></label>
-        <div class="controls"><button id="loadFlightEditorBtn" class="btn secondary">Opgeslagen indeling laden</button></div>
-        <div id="flightEditorPreview"></div>
-        <div class="controls"><button id="saveFlightEditorBtn" class="btn" disabled>Wijzigingen opslaan</button><button id="cancelFlightEditorBtn" class="btn secondary" disabled>Wijzigingen annuleren</button></div>
-        <div id="flightEditorStatus" class="status" role="status" aria-live="polite">Laad de opgeslagen indeling om teams te wisselen.</div>
-      </div>
-
       <div class="subcard">
         <h3>Scorekaart heropenen</h3>
         <p class="muted">Gebruik dit als een definitieve scorekaart gecorrigeerd moet worden.</p>
@@ -1517,95 +1507,6 @@ function populateBeheerTeams(){
   });
   if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
 }
-
-// The editor keeps its own draft so realtime updates cannot discard unsaved swaps.
-let flightEditBase=[], flightEditDraft=[], flightEditDay=1, flightEditBusy=false;
-const flightEditFields=["team1_id","team2_id"];
-function flightEditMessage(message){document.getElementById("flightEditorStatus").textContent=message;}
-function flightEditValid(rows){
-  const ids=rows.flatMap(f=>flightEditFields.map(k=>f[k]));
-  return rows.length===3 && new Set(rows.map(f=>f.flight_number)).size===3 &&
-    new Set(ids).size===6 && ids.every(id=>window.currentTeams.some(t=>t.id===id));
-}
-function renderFlightEditor(){
-  const box=document.getElementById("flightEditorPreview");box.replaceChildren();
-  const dirty=JSON.stringify(flightEditDraft)!==JSON.stringify(flightEditBase);
-  document.getElementById("saveFlightEditorBtn").disabled=flightEditBusy||!dirty||!flightEditValid(flightEditDraft);
-  document.getElementById("cancelFlightEditorBtn").disabled=flightEditBusy||!dirty;
-  document.getElementById("editFlightDay").disabled=flightEditBusy;
-  document.getElementById("loadFlightEditorBtn").disabled=flightEditBusy;
-  flightEditDraft.forEach((flight,index)=>{
-    const card=document.createElement("div");card.className="team-card";card.style.marginBottom="10px";
-    const title=document.createElement("h4");title.textContent='Flight '+flight.flight_number+' · '+String(flight.start_time||'').slice(0,5);card.appendChild(title);
-    flightEditFields.forEach((field,slot)=>{
-      const label=document.createElement("label");label.style.display="block";label.style.marginBottom="8px";
-      const caption=document.createElement("span");caption.className="label";caption.textContent='Team '+(slot+1)+' — kies een team om van plek te wisselen';
-      const select=document.createElement("select");select.disabled=flightEditBusy;
-      flightEditDraft.forEach(other=>flightEditFields.forEach(key=>{
-        const team=window.currentTeams.find(t=>t.id===other[key]);
-        const option=document.createElement("option");option.value=String(other[key]);option.textContent=team?teamDisplay(team):'Onbekend team';select.appendChild(option);
-      }));
-      select.value=String(flight[field]);
-      select.addEventListener("change",()=>swapFlightTeam(index,field,select.value));
-      label.append(caption,select);card.appendChild(label);
-    });box.appendChild(card);
-  });
-}
-function swapFlightTeam(index,field,value){
-  if(!window.adminAuthenticated||flightEditBusy)return;
-  const source=flightEditDraft[index];if(!source||!flightEditFields.includes(field))return;
-  for(const target of flightEditDraft){
-    for(const key of flightEditFields){
-      if(String(target[key])===value){
-        const previous=source[field];source[field]=target[key];target[key]=previous;
-        renderFlightEditor();flightEditMessage("Conceptindeling aangepast. Deelnemers zien de wijziging pas na opslaan.");return;
-      }
-    }
-  }
-}
-async function fetchEditableFlights(day){
-  const {data,error}=await window.supabaseClient.from("flights").select("flight_number,team1_id,team2_id,start_time").eq("day",day).order("flight_number");
-  if(error)throw error;return data||[];
-}
-async function loadFlightEditor(){
-  if(!window.adminAuthenticated||!window.adminPin||flightEditBusy)return;
-  const selected=Number(document.getElementById("editFlightDay").value);
-  if(JSON.stringify(flightEditDraft)!==JSON.stringify(flightEditBase)&&!confirm("Niet-opgeslagen wijzigingen verwerpen?")){
-    document.getElementById("editFlightDay").value=String(flightEditDay);return;
-  }
-  flightEditBusy=true;flightEditDay=selected;flightEditBase=[];flightEditDraft=[];renderFlightEditor();flightEditMessage("Indeling laden...");
-  try{
-    const rows=await fetchEditableFlights(selected);
-    if(!flightEditValid(rows)){flightEditMessage("Maak eerst een volledige indeling definitief bij Flights voor deze dag.");return;}
-    flightEditBase=structuredClone(rows);flightEditDraft=structuredClone(rows);
-    flightEditMessage("Kies bij een plek een ander team. Beide teams wisselen automatisch van plek.");
-  }catch(error){console.error(error);flightEditMessage("Laden mislukt. Probeer opnieuw.");}
-  finally{flightEditBusy=false;renderFlightEditor();}
-}
-async function saveFlightEditor(){
-  if(!window.adminAuthenticated||!window.adminPin||flightEditBusy||!flightEditValid(flightEditDraft))return;
-  if(JSON.stringify(flightEditBase)===JSON.stringify(flightEditDraft))return;
-  flightEditBusy=true;renderFlightEditor();flightEditMessage("Wijzigingen opslaan...");
-  try{
-    const latest=await fetchEditableFlights(flightEditDay);
-    if(JSON.stringify(latest)!==JSON.stringify(flightEditBase)){
-      flightEditMessage("De opgeslagen indeling is intussen gewijzigd. Laad de indeling opnieuw voordat je opslaat.");return;
-    }
-    const {error}=await window.supabaseClient.rpc("save_flights",{input_pin:window.adminPin,input_day:flightEditDay,input_flights:flightEditDraft});
-    if(error)throw error;
-    flightEditBase=structuredClone(flightEditDraft);
-    await loadFlights();
-    flightEditMessage("Flightindeling dag "+flightEditDay+" opgeslagen en zichtbaar voor deelnemers.");
-  }catch(error){console.error(error);flightEditMessage("Opslaan niet bevestigd. Je concept blijft bewaard; controleer de verbinding en probeer opnieuw.");}
-  finally{flightEditBusy=false;renderFlightEditor();}
-}
-document.getElementById("loadFlightEditorBtn").addEventListener("click",loadFlightEditor);
-document.getElementById("editFlightDay").addEventListener("change",loadFlightEditor);
-document.getElementById("saveFlightEditorBtn").addEventListener("click",saveFlightEditor);
-document.getElementById("cancelFlightEditorBtn").addEventListener("click",()=>{
-  if(flightEditBusy)return;
-  flightEditDraft=structuredClone(flightEditBase);renderFlightEditor();flightEditMessage("Wijzigingen geannuleerd.");
-});
 
 async function beheerAdminLogin(){
   const pin=document.getElementById("beheerAdminPin").value.trim();
