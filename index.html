@@ -192,7 +192,7 @@
 
   <section id="flights" class="panel card">
     <h2>Flightindeling</h2>
-    <p class="intro">Dag 1 wordt willekeurig ingedeeld. Dag 2 wordt automatisch gemaakt op basis van de definitieve stand van Dag 1.</p>
+    <p class="intro">Dag 1 wordt willekeurig ingedeeld. Dag 2 wordt automatisch gemaakt op basis van de definitieve stand van Dag 1. Een nieuwe indeling is pas zichtbaar voor deelnemers nadat je op Dag 1 definitief of Dag 2 definitief klikt.</p>
 
     <div class="admin-box">
       <label>
@@ -907,6 +907,7 @@ async function saveDay1Flights(){
     alert("Opslaan van de flightindeling is niet gelukt.");
     return;
   }
+  document.getElementById("saveDay1FlightsBtn").disabled=true;
   await loadFlights();
   document.getElementById("reshuffleDay1Btn").disabled=true;
   document.getElementById("saveDay1FlightsBtn").disabled=true;
@@ -914,53 +915,56 @@ async function saveDay1Flights(){
 }
 
 
+// Refresh from authoritative rows, including after a missed mobile realtime event.
+let flightRefreshSequence=0;
 function subscribeFlights(){
-  window.supabaseClient
-    .channel("live-flights")
-    .on(
-      "postgres_changes",
-      {event:"*",schema:"public",table:"flights"},
-      async ()=>{
-        const s=document.getElementById("flightLiveStatus");
-        if(s) s.textContent="Flightindeling bijgewerkt.";
-        await loadFlights();
-      }
-    )
-    .subscribe(status=>{
-      const s=document.getElementById("flightLiveStatus");
-      if(!s) return;
-      if(status==="SUBSCRIBED") s.textContent="Live flights actief.";
-    });
+  if(window.flightSubscription)return;
+  window.flightSubscription=window.supabaseClient.channel("live-flights")
+    .on("postgres_changes",{event:"*",schema:"public",table:"flights"},()=>loadFlights())
+    .on("postgres_changes",{event:"*",schema:"public",table:"teams"},()=>loadFlights())
+    .subscribe(status=>{if(status==="SUBSCRIBED")loadFlights();});
+  const refresh=()=>{if(document.visibilityState!=="hidden")loadFlights();};
+  document.addEventListener("visibilitychange",refresh);
+  window.addEventListener("pageshow",refresh);
+  window.addEventListener("online",refresh);
+  document.querySelector('[data-tab="flights"]').addEventListener("click",refresh);
+  window.setInterval(refresh,15000);
 }
-
 async function loadFlights(){
-  if(!window.currentTeams||!window.currentTeams.length)return;
-  const {data,error}=await window.supabaseClient
-    .from("flights")
-    .select("id,day,flight_number,team1_id,team2_id,start_time")
-    .order("day")
-    .order("flight_number");
-  if(error){console.error(error);return;}
-
-  const mapDay=(day)=> (data||[]).filter(f=>f.day===day).map(f=>[
-    window.currentTeams.find(t=>t.id===f.team1_id),
-    window.currentTeams.find(t=>t.id===f.team2_id)
-  ]).filter(f=>f[0]&&f[1]);
-
-  const d1=mapDay(1);
-  if(d1.length===3){
-    window.pendingDay1Flights=d1;
-    renderDay1Flights(d1,true);
-  }
-
-  const d2=mapDay(2);
-  if(d2.length===3){
-    window.pendingDay2Flights=d2;
-    renderDay2Flights(d2,true);
+  const sequence=++flightRefreshSequence;
+  const status=document.getElementById("flightLiveStatus");
+  try{
+    const results=await Promise.all([
+      window.supabaseClient.from("flights").select("id,day,flight_number,team1_id,team2_id,start_time").order("day").order("flight_number"),
+      window.supabaseClient.from("teams").select("id,player1_id,player2_id,team_hcp,draw_order").order("draw_order"),
+      window.supabaseClient.from("players").select("id,name,sex,partner_name,exact_hcp,course_hcp")
+    ]);
+    if(sequence!==flightRefreshSequence)return;
+    const failed=results.find(r=>r.error);if(failed)throw failed.error;
+    const [flights,teamRows,players]=results.map(r=>r.data||[]);
+    const teams=teamRows.map(t=>({...t,player1:players.find(p=>p.id===t.player1_id),player2:players.find(p=>p.id===t.player2_id)})).filter(t=>t.player1&&t.player2);
+    window.currentTeams=teams;
+    let draft=false,incomplete=false;
+    for(const day of [1,2]){
+      const save=document.getElementById('saveDay'+day+'FlightsBtn');
+      const pending=window['pendingDay'+day+'Flights']||[];
+      const validDraft=pending.length===3&&pending.flat().every(t=>teams.some(current=>current.id===t.id));
+      if(!save.disabled&&validDraft){draft=true;continue;}
+      const rows=flights.filter(f=>f.day===day);
+      const mapped=rows.map(f=>[teams.find(t=>t.id===f.team1_id),teams.find(t=>t.id===f.team2_id)]);
+      const complete=mapped.length===3&&mapped.every(f=>f[0]&&f[1]);
+      const visible=complete?mapped:[];
+      incomplete=incomplete||(rows.length>0&&!complete);
+      window['pendingDay'+day+'Flights']=visible;
+      (day===1?renderDay1Flights:renderDay2Flights)(visible,true);
+      save.disabled=true;
+    }
+    status.textContent=draft?"Conceptindeling: klik op Definitief om deze te delen. Deelnemers zien tot die tijd de opgeslagen indeling.":incomplete?"Indeling wordt bijgewerkt; de app probeert het automatisch opnieuw.":"Opgeslagen flightindeling bijgewerkt · "+new Date().toLocaleTimeString("nl-NL");
+  }catch(error){
+    if(sequence!==flightRefreshSequence)return;
+    console.error(error);status.textContent="Flightindeling kon niet worden vernieuwd. De getoonde indeling kan verouderd zijn; de app probeert het automatisch opnieuw.";
   }
 }
-
-
 
 window.pendingDay2Flights=[];
 window.publicationSettings={publish_day1:false,publish_day2:false,publish_total:false};
@@ -1270,8 +1274,8 @@ async function saveDay2Flights(){
     input_flights:payload
   });
   if(error){console.error(error);alert("Opslaan van Dag 2 flights is niet gelukt.");return;}
-  await loadFlights();
   document.getElementById("saveDay2FlightsBtn").disabled=true;
+  await loadFlights();
   alert("Flightindeling Dag 2 is definitief opgeslagen.");
 }
 
