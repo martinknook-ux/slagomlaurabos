@@ -928,6 +928,7 @@ function subscribeFlights(){
   window.addEventListener("pageshow",refresh);
   window.addEventListener("online",refresh);
   document.querySelector('[data-tab="flights"]').addEventListener("click",refresh);
+  document.querySelector('[data-tab="scores"]').addEventListener("click",refresh);
   window.setInterval(refresh,15000);
 }
 async function loadFlights(){
@@ -944,6 +945,8 @@ async function loadFlights(){
     const [flights,teamRows,players]=results.map(r=>r.data||[]);
     const teams=teamRows.map(t=>({...t,player1:players.find(p=>p.id===t.player1_id),player2:players.find(p=>p.id===t.player2_id)})).filter(t=>t.player1&&t.player2);
     window.currentTeams=teams;
+    populateScoreTeams();
+    populateBeheerTeams();
     let draft=false,incomplete=false;
     for(const day of [1,2]){
       const save=document.getElementById('saveDay'+day+'FlightsBtn');
@@ -1307,6 +1310,9 @@ function populateScoreTeams(){
   const sel=document.getElementById("scoreTeamSelect");
   if(!sel) return;
   const previous=sel.value;
+  const expected=(window.currentTeams||[]).map(t=>[String(t.id),teamDisplay(t)]);
+  const displayed=[...sel.options].filter(o=>o.value).map(o=>[o.value,o.textContent]);
+  if(JSON.stringify(expected)===JSON.stringify(displayed)&&sel.options.length)return;
   sel.innerHTML='<option value="">Kies team</option>';
   (window.currentTeams||[]).forEach(t=>{
     const o=document.createElement("option");
@@ -1315,6 +1321,10 @@ function populateScoreTeams(){
     sel.appendChild(o);
   });
   if(previous && [...sel.options].some(o=>o.value===previous)) sel.value=previous;
+  if(previous && sel.value!==previous){
+    loadScorecard();
+    document.getElementById("scoreLiveStatus").textContent="De teams zijn gewijzigd. Kies je nieuwe team om scores in te voeren.";
+  }
 }
 
 function getSelectedScoreTeam(){
@@ -1395,7 +1405,9 @@ function renderScoreSummary(){
   submit.disabled=window.scorecardSubmitted || completed!==18;
 }
 
+let scoreLoadSequence=0;
 async function loadScorecard(){
+  const sequence=++scoreLoadSequence;
   const team=getSelectedScoreTeam();
   const day=Number(document.getElementById("scoreDaySelect").value);
   if(!team){
@@ -1410,6 +1422,7 @@ async function loadScorecard(){
     .eq("team_id",team.id)
     .eq("day",day)
     .order("hole");
+  if(sequence!==scoreLoadSequence || getSelectedScoreTeam()?.id!==team.id || Number(document.getElementById("scoreDaySelect").value)!==day)return;
   if(error){
     console.error(error);
     document.getElementById("scoreLiveStatus").textContent="Laden van scores is niet gelukt.";
