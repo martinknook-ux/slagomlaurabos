@@ -539,23 +539,39 @@ async function loadExistingTeams(){
   await loadStandings();
   await loadBirdieStandings();
 }
-async function adminLogin(){
-  const pin=document.getElementById("adminPin").value.trim();
+async function loginCompetitionAdmin(pinId,statusId){
+  const input=document.getElementById(pinId);
+  const pin=input.value.trim();
+  const status=document.getElementById(statusId);
   if(!pin){alert("Vul de pincode in.");return;}
-  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
-  const status=document.getElementById("adminStatus");
-  if(error||data!==true){
+  try{
+    const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
+    if(error)throw error;
+    if(data!==true){status.textContent="Pincode niet juist.";status.classList.add("error");return;}
+    window.adminPin=pin;
+    window.adminAuthenticated=true;
+    ["adminPin","flightAdminPin","standAdminPin","beheerAdminPin"].forEach(id=>{
+      const field=document.getElementById(id);
+      field.value="";
+      field.closest(".admin-box").classList.add("hidden");
+    });
+    ["adminStatus","flightAdminStatus","standAdminStatus","beheerAdminStatus"].forEach(id=>{
+      const message=document.getElementById(id);
+      message.textContent="Ingelogd als wedstrijdleiding voor alle onderdelen.";
+      message.classList.remove("error");
+    });
+    ["drawControls","flightControls","publicationControls","beheerControls"].forEach(id=>document.getElementById(id).classList.remove("hidden"));
+    populateBeheerTeams();
+    renderStandings();
+  }catch(error){
     console.error(error);
-    status.textContent="Pincode niet juist.";
+    status.textContent="Inloggen is niet gelukt. Controleer de verbinding en probeer opnieuw.";
     status.classList.add("error");
-    window.adminAuthenticated=false;
-    return;
   }
-  window.adminPin=pin;
-  window.adminAuthenticated=true;
-  status.textContent="Ingelogd als wedstrijdleiding.";
-  status.classList.remove("error");
-  document.getElementById("drawControls").classList.remove("hidden");
+}
+
+async function adminLogin(){
+  await loginCompetitionAdmin("adminPin","adminStatus");
 }
 
 function publicDrawPayload(stage, revealedTeams=[]){
@@ -831,25 +847,7 @@ function teamDisplay(team){
 }
 
 async function flightAdminLogin(){
-  const pin=document.getElementById("flightAdminPin").value.trim();
-  if(!pin){alert("Vul de pincode in.");return;}
-  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
-  const status=document.getElementById("flightAdminStatus");
-  if(error||data!==true){
-    console.error(error);
-    status.textContent="Pincode niet juist.";
-    status.classList.add("error");
-    return;
-  }
-  window.adminPin=pin;
-  window.adminAuthenticated=true;
-  document.getElementById("adminPin").value=pin;
-  document.getElementById("adminStatus").textContent="Ingelogd als wedstrijdleiding.";
-  document.getElementById("adminStatus").classList.remove("error");
-  document.getElementById("drawControls").classList.remove("hidden");
-  status.textContent="Ingelogd als wedstrijdleiding.";
-  status.classList.remove("error");
-  document.getElementById("flightControls").classList.remove("hidden");
+  await loginCompetitionAdmin("flightAdminPin","flightAdminStatus");
 }
 
 function renderDay1Flights(flights, isSaved=false){
@@ -1210,25 +1208,7 @@ function subscribeSettings(){
 }
 
 async function standAdminLogin(){
-  const pin=document.getElementById("standAdminPin").value.trim();
-  if(!pin){alert("Vul de pincode in.");return;}
-  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
-  const status=document.getElementById("standAdminStatus");
-  if(error||data!==true){
-    console.error(error);
-    status.textContent="Pincode niet juist.";
-    status.classList.add("error");
-    return;
-  }
-  window.adminPin=pin;
-  window.adminAuthenticated=true;
-  document.getElementById("adminPin").value=pin;
-  document.getElementById("flightAdminPin").value=pin;
-  status.textContent="Ingelogd als wedstrijdleiding.";
-  status.classList.remove("error");
-  document.getElementById("publicationControls").classList.remove("hidden");
-  document.getElementById("flightControls").classList.remove("hidden");
-  renderStandings();
+  await loginCompetitionAdmin("standAdminPin","standAdminStatus");
 }
 
 async function togglePublication(key){
@@ -1538,33 +1518,7 @@ function populateBeheerTeams(){
 }
 
 async function beheerAdminLogin(){
-  const pin=document.getElementById("beheerAdminPin").value.trim();
-  if(!pin){alert("Vul de pincode in.");return;}
-  const {data,error}=await window.supabaseClient.rpc("check_admin_pin",{input_pin:pin});
-  const status=document.getElementById("beheerAdminStatus");
-  if(error||data!==true){
-    console.error(error);
-    status.textContent="Pincode niet juist.";
-    status.classList.add("error");
-    return;
-  }
-
-  window.adminPin=pin;
-  window.adminAuthenticated=true;
-
-  ["adminPin","flightAdminPin","standAdminPin"].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.value=pin;
-  });
-
-  status.textContent="Ingelogd als wedstrijdleiding.";
-  status.classList.remove("error");
-  document.getElementById("beheerControls").classList.remove("hidden");
-  document.getElementById("drawControls")?.classList.remove("hidden");
-  document.getElementById("flightControls")?.classList.remove("hidden");
-  document.getElementById("publicationControls")?.classList.remove("hidden");
-  populateBeheerTeams();
-  renderStandings();
+  await loginCompetitionAdmin("beheerAdminPin","beheerAdminStatus");
 }
 
 async function reopenSelectedScorecard(){
